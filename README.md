@@ -1,0 +1,1 @@
+Helps teams keep Collab documentation current as the product changes. It reviews product updates, GitHub issues, pull requests, release details, and existing documentation. It then drafts page updates, release notes, and summaries with links to the original sources. If information is missing or conflicting, it flags the gap instead of guessing.
