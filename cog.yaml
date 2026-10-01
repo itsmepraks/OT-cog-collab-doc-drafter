@@ -1,0 +1,44 @@
+schema: openteams/cog-manifest [0.1]
+id: openteams/cog-collab-docs-drafter
+version: 0.1.0
+summary: >
+  Drafts Collab release notes from supplied release evidence, links every
+  claim to its source, and flags missing or conflicting information.
+license: Apache-2.0
+kind: context
+owner: bankoleebenezer111@gmail.com
+frames: []
+context:
+  instructions: context/system.md
+  input_schema: context/input-schema.json
+  output_schema: context/output-schema.json
+  output_example: context/output-example.json
+requires:
+- capability: model-endpoint/openai-compatible
+  locality: any
+interfaces:
+- name: web-api
+  kind: http-json
+  task: serve
+  endpoint: http://127.0.0.1:8120/ask
+  audience: usage
+  default: true
+- name: cli
+  kind: command
+  task: ask
+  audience: usage
+- name: health
+  kind: command
+  task: check
+  audience: lifecycle
+io:
+  accepts:
+  - task_request
+  produces:
+  - release_notes_draft
+memory: none
+prohibits:
+- send_external_message
+- modify_source_data
+- publish_release_notes
+- change_release_metadata
