@@ -1,0 +1,56 @@
+# A DEPLOYMENT DESCRIPTOR model Cog, created by cog-smith (generate-descriptors).
+# Pattern: cog-forge/cog-collab-qwen35b (engineering-gates PASS).
+#
+# It carries the PINNABLE IDENTITY of a model deployment (name, quantization,
+# runtime, revision, locality) as package content. The reachable ADDRESS is
+# an installation fact: either declared here (a fixed, known endpoint) or
+# `address: install-time`, in which case resolution requires --endpoint and
+# writes the address only into the consumer's binding record — never here.
+# Credentials are REFERENCES (api_key_env names an environment variable);
+# a descriptor never contains a key.
+
+schema: openteams/cog-manifest [0.1]
+id: openteams/cog-sonnet-gateway
+version: "0.1.0"
+summary: >
+  Deployment descriptor for anthropic/claude-sonnet-4.6 (intelligence-hub gateway (OpenRouter-backed)), served over an OpenAI-compatible API. Carries the pinnable identity of the deployment; credentials and (where install-time) the address are installation facts.
+license: BSD-3-Clause
+
+kind: model
+
+owner: OpenTeams
+
+# Where this deployment runs. A context Cog's requires[].locality constraint
+# is checked against this at resolution — this is how sovereignty is
+# enforced at bind time, not just displayed in a catalog.
+locality: cloud
+
+model:
+  # Relationship to core CogSpec (review 2026-08-22, F5): core defines a
+  # model Cog as carrying a model and its serving software. Under the
+  # Collab/OpenTeams PROFILE, a deployment DESCRIPTOR is a model Cog whose
+  # carried content is the PINNABLE IDENTITY of a deployment rather than
+  # the weights themselves — the forge-ratified pattern (cog-collab-qwen35b,
+  # re-review P0-4). The marker below makes that machine-readable; core
+  # validators ignore manifest contents by design.
+  descriptor: true
+  name: anthropic/claude-sonnet-4.6
+  quantization: null
+  runtime: null
+  # Set when the deployment pins a served revision; until then, bindings are
+  # pinned to (id, version, model identity) with revision: null, and results
+  # say so.
+  revision: null
+
+interfaces:
+  - name: web-api
+    kind: openai-compatible
+    audience: usage
+    # The address is an installation fact — resolution requires --endpoint.
+    address: install-time
+    served_model_id: anthropic/claude-sonnet-4.6
+    api_key_env: HUB_GATEWAY_API_KEY
+    default: true
+
+provides:
+  - model-endpoint/openai-compatible

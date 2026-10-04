@@ -1,0 +1,30 @@
+[workspace]
+name = "cog-collab-docs-drafter"
+version = "0.1.0"
+description = "Context Cog: Drafts Collab release notes from supplied release evidence, links every claim to its source, and flags missing or conflicting information."
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+python = ">=3.10"
+# reads cog.yaml (resolution) and *.fixture.yaml (eval)
+pyyaml = "*"
+# normative input/output schema validation
+jsonschema = "*"
+
+[tasks]
+# --- usage ops (face users and the Op layer) ---
+ask = "python src/cog_cli.py"
+# --- lifecycle ops (face the hosting environment) ---
+# serve starts the web-api entry point: the ENDPOINT is the usage surface,
+# starting it is lifecycle (see the interface's audience note in cog.yaml)
+serve = "python src/cog_api.py"
+check = "python src/cog_cli.py --check"
+resolve = "python src/cog_resolve.py"
+use = "python src/cog_use.py"
+eval = "python src/cog_eval.py"
+test = "python -m unittest discover -s tests -v"
+
+# NOTE: no [activation.env] — activation variables override the shell and
+# silently pin the endpoint (cog-demo finding 2). Defaults live in the
+# machinery; model.json and COG_MODEL_* override them.

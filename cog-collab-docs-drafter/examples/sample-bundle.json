@@ -1,0 +1,90 @@
+{
+  "release": {
+    "product": "Collab Desktop",
+    "repository": "example-org/collab-desktop-example",
+    "previous_tag": "1.2.1",
+    "target_tag": "1.3.0",
+    "channel": "stable",
+    "target_commit": "7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d"
+  },
+  "notes": "Synthetic bundle for public tests and evaluation. It is shaped like a real Collab release but describes no real release.",
+  "sources": [
+    {
+      "id": "pr-310",
+      "kind": "pull_request",
+      "title": "feat(frames): show inherited Frames in conversation details",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/310",
+      "text": "Pull request #310: feat(frames): show inherited Frames in conversation details\nMerged: 2026-06-02T09:12:00Z into main\nCommits from this pull request in the release range:\n- a10f3c2 feat(frames): show inherited Frames in conversation details (#310)\n\nCloses #301.\n\nConversation details listed only the Frames a user added by hand, so people could not see which company or team Frames were also shaping the answer.\n\n## What this does\n\nThe **Conversation details** panel now has an **Inherited Frames** section. It lists every Frame the conversation inherits, grouped by where it comes from (Hubspace, team, or project), with each Frame's version.\n\nInherited Frames are read-only in this panel. Removing one still happens in **Settings → Frames**.\n\n## Verification\n- `npm run check` passes\n- 4 new component tests for the grouped list"
+    },
+    {
+      "id": "issue-301",
+      "kind": "issue",
+      "title": "Show which Frames a conversation inherits",
+      "url": "https://github.com/example-org/collab-desktop-example/issues/301",
+      "text": "Issue #301: Show which Frames a conversation inherits\nState: CLOSED\n\nWhen a conversation uses company or team Frames, the details panel does not show them. Users cannot tell why an answer follows a rule they did not add."
+    },
+    {
+      "id": "pr-312",
+      "kind": "pull_request",
+      "title": "fix(connectors): retry the GitHub connector when a token refresh times out",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/312",
+      "text": "Pull request #312: fix(connectors): retry the GitHub connector when a token refresh times out\nMerged: 2026-06-03T14:40:00Z into main\nCommits from this pull request in the release range:\n- b21e4d3 fix(connectors): retry the GitHub connector when a token refresh times out (#312)\n\nCloses #305.\n\nWhen the token refresh request timed out, the GitHub connector gave up and showed **Disconnected** until the user signed in again.\n\nThe connector now retries the refresh up to three times before it reports a problem. If all three attempts fail, it shows **Sign in again** instead of **Disconnected**, so the next step is clear.\n\nTested on macOS, Windows and Linux."
+    },
+    {
+      "id": "issue-305",
+      "kind": "issue",
+      "title": "GitHub connector disconnects after a slow network moment",
+      "url": "https://github.com/example-org/collab-desktop-example/issues/305",
+      "text": "Issue #305: GitHub connector disconnects after a slow network moment\nState: CLOSED\n\nOn a slow connection the GitHub connector sometimes shows Disconnected and I have to sign in again. It happens a few times a week."
+    },
+    {
+      "id": "pr-314",
+      "kind": "pull_request",
+      "title": "fix(ops): mark a cancelled Op run as Cancelled in History",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/314",
+      "text": "Pull request #314: fix(ops): mark a cancelled Op run as Cancelled in History\nMerged: 2026-06-04T11:05:00Z into main\nCommits from this pull request in the release range:\n- c32f5e4 fix(ops): mark a cancelled Op run as Cancelled in History (#314)\n\nCancelling an Op run stopped the work but left the run marked **Running** in History forever.\n\nCancelled runs are now marked **Cancelled** in History as soon as the Op stops.\n\nKnown issue: a run cancelled while Collab is offline still shows **Running** until Collab reconnects to the Hub. Tracked separately in #320."
+    },
+    {
+      "id": "pr-315",
+      "kind": "pull_request",
+      "title": "ci: cache Go modules in the backend workflow",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/315",
+      "text": "Pull request #315: ci: cache Go modules in the backend workflow\nMerged: 2026-06-04T15:30:00Z into main\nCommits from this pull request in the release range:\n- d43a6f5 ci: cache Go modules in the backend workflow (#315)\n\nCaches the Go module download directory between backend CI runs. Cuts the backend job from about 9 minutes to about 5. No product changes."
+    },
+    {
+      "id": "pr-316",
+      "kind": "pull_request",
+      "title": "refactor(agents): split the conversation store into read and write modules",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/316",
+      "text": "Pull request #316: refactor(agents): split the conversation store into read and write modules\nMerged: 2026-06-05T10:20:00Z into main\nCommits from this pull request in the release range:\n- e54b7a6 refactor(agents): split the conversation store into read and write modules (#316)\n\nSplits the conversation store into a read module and a write module so later work on History search is easier to review. No behavior change; existing tests pass unchanged."
+    },
+    {
+      "id": "pr-317",
+      "kind": "pull_request",
+      "title": "test(ops): cover cancelled runs in the History list",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/317",
+      "text": "Pull request #317: test(ops): cover cancelled runs in the History list\nMerged: 2026-06-05T12:00:00Z into main\nCommits from this pull request in the release range:\n- f65c8b7 test(ops): cover cancelled runs in the History list (#317)\n\nAdds component tests for the Cancelled state introduced in #314. Test-only."
+    },
+    {
+      "id": "pr-318",
+      "kind": "pull_request",
+      "title": "fix(windows): port the per-user installer fix (#309) to main",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/318",
+      "text": "Pull request #318: fix(windows): port the per-user installer fix (#309) to main\nMerged: 2026-06-06T08:45:00Z into main\nCommits from this pull request in the release range:\n- a76d9c8 fix(windows): port the per-user installer fix (#309) to main (#318)\n\nCherry-pick of #309, which merged to `release/1.2` on 2026-05-20 and shipped in 1.2.1.\n\n## Why this is needed on `main`\n\n`main` still asks for administrator rights when the user picks a per-user install on Windows. Without this port, the next release from `main` would bring the prompt back.\n\nNo new behavior compared with 1.2.1."
+    },
+    {
+      "id": "pr-319",
+      "kind": "pull_request",
+      "title": "docs: fix the broken Frames link on the help site",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/319",
+      "text": "Pull request #319: docs: fix the broken Frames link on the help site\nMerged: 2026-06-06T09:30:00Z into main\nCommits from this pull request in the release range:\n- b87eadf docs: fix the broken Frames link on the help site (#319)\n\nFixes a 404 on the help website's Frames page. Website content only; the app is unchanged."
+    },
+    {
+      "id": "release-1.3.0",
+      "kind": "release",
+      "title": "1.3.0",
+      "url": "https://github.com/example-org/collab-desktop-example/releases/tag/1.3.0",
+      "text": "GitHub release 1.3.0 (tag 1.3.0)\nPublished: 2026-06-09T17:00:00Z\nPrerelease: false\nDraft: false\nTarget: main\nAssets:\n- collab-desktop-linux-amd64.tar.gz\n- collab-desktop-linux-amd64.tar.gz.asc\n- collab-desktop-linux-amd64.tar.gz.sha256\n- collab-desktop-macos.dmg\n- collab-desktop-macos.dmg.sha256\n- collab-desktop-windows-amd64-installer.exe\n- collab-desktop-windows-amd64-installer.exe.sha256\n\nRelease body:\n(empty)"
+    }
+  ]
+}

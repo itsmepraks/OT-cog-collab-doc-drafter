@@ -1,0 +1,21 @@
+# Real release, private evidence. NOT declared in cog.yaml: the bundle comes
+# from a private repository and is never committed (evals/private/ is
+# gitignored). Build it, then run this fixture by path:
+#
+#   python ../tools/collect_evidence.py --previous 0.7.1 --target 0.7.2 \
+#       --out evals/private/collab-0.7.2.bundle.json
+#   pixi run eval -- --fixture evals/collab-0.7.2.fixture.yaml
+#
+# Reference answer: the published 0.7.2 notes (apollo-desktop-docs,
+# src/content/docs/releases/2026-09-collab-0-7-2.md) have five user-facing
+# sections. Compare the draft with them by hand; the checks below are only
+# the mechanical floor.
+name: collab-0.7.2
+bundle: evals/private/collab-0.7.2.bundle.json
+expect:
+  error: false
+  parsed: true
+  abstained: false
+  min_entries: 4
+  categories_include: [added, fixed]
+  grounded: true

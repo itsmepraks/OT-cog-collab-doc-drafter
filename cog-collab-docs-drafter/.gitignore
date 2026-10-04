@@ -1,0 +1,6 @@
+model.json
+.pixi/
+__pycache__/
+*.pyc
+runs/
+evals/private/

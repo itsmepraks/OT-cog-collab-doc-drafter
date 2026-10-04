@@ -1,0 +1,16 @@
+# Happy path. Run with: pixi run eval
+# The synthetic 1.3.0 bundle holds three user-facing changes (inherited
+# Frames, GitHub connector retry, cancelled Op runs), one known limitation,
+# a cherry-pick that already shipped in 1.2.1, and CI, refactor, test and
+# docs-site changes that belong in `excluded`.
+name: smoke
+bundle: examples/sample-bundle.json
+expect:
+  error: false
+  parsed: true
+  abstained: false
+  required_keys: [release, intro, entries, downloads, excluded, gaps]
+  min_entries: 3
+  categories_include: [added, fixed]
+  grounded: true
+  forbid_tokens: []

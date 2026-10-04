@@ -1,0 +1,11 @@
+# Boundary. Every change is CI, test or refactor. The right answer is a draft
+# with no entries that says so, with every source excluded. This is not an
+# abstention.
+name: internal-only
+bundle: evals/bundles/internal-only.json
+expect:
+  error: false
+  parsed: true
+  abstained: false
+  categories_exclude: [added, improved, fixed, known_limitation, action_required]
+  grounded: true
