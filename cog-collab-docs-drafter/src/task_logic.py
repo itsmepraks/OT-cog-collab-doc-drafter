@@ -2,7 +2,8 @@
 
 Everything else in src/ is shared cog-smith machinery, byte-identical across
 created Cogs and verified by `smith check`. Your Cog's identity lives in:
-  - cog.yaml (what you are, what you require, what you prohibit)
+  - the manifest — [tool.cog] in pixi.toml, or cog.yaml — (what you are,
+    what you require, what you prohibit)
   - context/ (system.md instructions, input/output schemas, worked example)
   - this file (how input becomes a prompt; what makes output trustworthy)
 
@@ -10,12 +11,16 @@ Task: draft release notes for one Collab release from a release evidence
 bundle. The contract checks below are the Cog's self-report (envelope
 `problems`), not Guards: a Gate or a person decides what to do with them.
 """
+import re
 
 # Words that count as labeling a draft as a candidate (Frame: "Clearly label
 # candidate or prerelease drafts").
 PRERELEASE_WORDS = ("prerelease", "pre-release", "release candidate", "candidate", "preview")
 
 CHANGE_KINDS = ("pull_request", "commit")
+
+# A UI label or file name the notes name exactly: **bold** or `code`.
+LABEL_RE = re.compile(r"\*\*(.+?)\*\*|`([^`]+)`")
 
 
 def _tag(value):
@@ -27,6 +32,20 @@ def _tag(value):
 def _sources(bundle):
     return {s["id"]: str(s.get("text", "")) for s in bundle.get("sources") or []
             if isinstance(s, dict) and s.get("id")}
+
+
+def _kinds(bundle):
+    return {s["id"]: s.get("kind") for s in bundle.get("sources") or []
+            if isinstance(s, dict) and s.get("id")}
+
+
+def _squash(text):
+    return " ".join(str(text or "").split())
+
+
+def _labels(text):
+    """The exact labels a passage names: **bold** spans and `code` spans."""
+    return [a or b for a, b in LABEL_RE.findall(str(text or ""))]
 
 
 def check_input(bundle):
@@ -49,8 +68,12 @@ def check_input(bundle):
     if not any(s.get("kind") in CHANGE_KINDS for s in bundle.get("sources") or []):
         problems.append(cog_core.problem(
             "input", "no pull_request or commit sources: nothing establishes what changed"))
-    # Any problem here refuses the run, so a missing target_commit is not
-    # reported here: render_input shows it and the model raises it as a gap.
+    # A warning does not refuse the run (cog-smith context-cog machinery
+    # 0.4.x): it travels in the envelope's problems beside the draft.
+    if not release.get("target_commit"):
+        problems.append(cog_core.problem(
+            "input", "release.target_commit is missing; the release cut is not pinned to a commit",
+            severity="warning"))
     return problems
 
 
@@ -88,6 +111,26 @@ def _unknown_ids(ids, sources, where):
     return []
 
 
+def _labels_problems(text, ids, sources, where):
+    """Frame: "preserve exact labels". Every **bold** or `code` label in
+    user-facing text must appear, verbatim, in a source that text cites."""
+    import cog_core
+    cited = [_squash(sources[i]) for i in ids or [] if i in sources]
+    return [cog_core.problem("grounding", f"{where}: label {label!r} does not appear in any "
+                                          f"source it cites")
+            for label in _labels(text) if not any(_squash(label) in c for c in cited)]
+
+
+def _release_record_problems(ids, kinds, where):
+    """Frame: "Use release metadata for publication facts". Dates and
+    download filenames must cite the release record, not a pull request."""
+    import cog_core
+    if ids and not any(kinds.get(i) == "release" for i in ids):
+        return [cog_core.problem("metadata-source", f"{where} cites no release record "
+                                                    f"(cites {sorted(ids)})")]
+    return []
+
+
 def check_output(parsed, bundle):
     """Task-specific semantic contract checks, run AFTER the output schema
     check. The forge rule: verifying a citation EXISTS is not verifying that
@@ -95,6 +138,7 @@ def check_output(parsed, bundle):
     import cog_core
     problems = []
     sources = _sources(bundle)
+    kinds = _kinds(bundle)
     release_in = bundle.get("release") or {}
     entries = [e for e in parsed.get("entries") or [] if isinstance(e, dict)]
     used = set()
@@ -131,6 +175,8 @@ def check_output(parsed, bundle):
         if date and not any(date in sources.get(i, "") for i in ids):
             problems.append(cog_core.problem(
                 "grounding", f"release.release_date {date} does not appear in any cited source"))
+        if date:
+            problems += _release_record_problems(ids, kinds, "release.release_date")
 
     # The intro is a claim too, and must say when a build is not stable.
     intro = parsed.get("intro") if isinstance(parsed.get("intro"), dict) else {}
@@ -138,6 +184,7 @@ def check_output(parsed, bundle):
     problems += _unknown_ids(intro.get("source_ids"), sources, "intro")
     if entries and not intro.get("source_ids"):
         problems.append(cog_core.problem("citation", "intro cites no sources"))
+    problems += _labels_problems(intro.get("text"), intro.get("source_ids"), sources, "intro")
     if release_in.get("channel") == "prerelease":
         text = str(intro.get("text") or "").lower()
         if not any(w in text for w in PRERELEASE_WORDS):
@@ -154,6 +201,10 @@ def check_output(parsed, bundle):
     # Every claim quotes its source verbatim.
     for e in entries:
         title = e.get("title") or "?"
+        claims = [c for c in e.get("claims") or [] if isinstance(c, dict)]
+        entry_ids = sorted({i for c in claims for i in c.get("source_ids") or []})
+        problems += _labels_problems(f"{title}\n{e.get('body', '')}", entry_ids, sources,
+                                     f"{title} / body")
         for k, claim in enumerate(e.get("claims") or []):
             if not isinstance(claim, dict):
                 continue
@@ -177,6 +228,7 @@ def check_output(parsed, bundle):
         if d.get("filename") and not any(d["filename"] in sources.get(i, "") for i in ids):
             problems.append(cog_core.problem(
                 "grounding", f"download {d['filename']!r} is not named in any cited source"))
+        problems += _release_record_problems(ids, kinds, f"download {d.get('filename')}")
 
     for g in parsed.get("gaps") or []:
         if isinstance(g, dict):

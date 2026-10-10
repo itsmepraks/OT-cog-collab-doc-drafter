@@ -2,8 +2,7 @@
 """Point this Cog at a model. Writes model.json (the binding record) next to the Cog.
 
     pixi run use local
-    pixi run use summary-lora
-    pixi run use collab --endpoint http://YOUR-COLLAB-HOST/v1 --insecure-http
+    pixi run use --endpoint http://127.0.0.1:8080/v1 --model qwen3-4b-q4_k_m --api-key-env COG_QWEN_BACKEND_TOKEN
     pixi run use openrouter --model qwen/qwen3.5-35b-a3b
     pixi run use --show
 
@@ -20,7 +19,8 @@ unpinned rather than silently unversioned.
 Contract checks enforced here (the Cog's own rules, not system Guards), before anything is written:
   - locality: the manifest's requires[].locality constraint must admit the preset
   - transport: plain HTTP to a non-loopback host is refused without --insecure-http
-Byte-identical across the cog-forge Cogs; tools/check_copies.py enforces it.
+Byte-identical across the Cogs that vendor it; `smith check` enforces it
+by hash.
 """
 import argparse
 import json
@@ -36,35 +36,14 @@ ROOT = Path(__file__).resolve().parent.parent
 PRESETS = {
     "local": {
         "endpoint": "http://127.0.0.1:8080/v1",
-        "model": "qwen2.5-3b-instruct-q4_k_m",
-        "api_key_env": None,
+        "model": "qwen3-4b-q4_k_m",
+        "api_key_env": "COG_QWEN_BACKEND_TOKEN",
         # llama-server constrains decoding to the schema: malformed output becomes
         # impossible rather than merely discouraged.
         "response_format": "json_schema",
         "locality": "local",
-        "deployment": "cog-demo/cog-qwen3b (loopback)",
-        "note": "the cog-demo cog-qwen3b model Cog on loopback",
-    },
-    "summary-lora": {
-        "endpoint": "http://127.0.0.1:8081/v1",
-        "model": "qwen2.5-3b-instruct-summary-sft-lora",
-        "api_key_env": None,
-        "response_format": "json_schema",
-        "locality": "local",
-        "deployment": "cog-demo/cog-qwen3b-summary-lora (loopback)",
-        "note": "the summarization LoRA — specialization vs base is the interesting comparison",
-    },
-    "collab": {
-        # Replace with the real Collab-hosted endpoint via --endpoint; this
-        # placeholder deliberately fails rather than silently answering from the
-        # wrong model.
-        "endpoint": "http://collab-host.invalid/v1",
-        "model": "Qwen/Qwen3.5-35B-A3B-GPTQ-Int4",
-        "api_key_env": "COLLAB_API_KEY",
-        "response_format": "json_object",
-        "locality": "customer-vpc",
-        "deployment": "collab-hosted qwen3.5-35b",
-        "note": "the Collab-hosted Qwen3.5-35B; pass --endpoint (and --insecure-http if plain HTTP on a trusted LAN)",
+        "deployment": "cog-qwen (loopback)",
+        "note": "the public cog-qwen model provider on loopback",
     },
     "openrouter": {
         "endpoint": "https://openrouter.ai/api/v1",
@@ -96,6 +75,12 @@ def main():
     ap.add_argument("--response-format", choices=["json_object", "json_schema", "none"],
                     help="json_schema constrains decoding (llama-server); none omits the param")
     ap.add_argument("--revision", help="deployment/model revision you trust; marks the binding pinned")
+    ap.add_argument("--timeout", type=int, metavar="N",
+                    help=f"caller deadline for one model call, in seconds "
+                         f"({cog_binding.REQUEST_TIMEOUT_MIN}–"
+                         f"{cog_binding.REQUEST_TIMEOUT_MAX}; default "
+                         f"{cog_binding.REQUEST_TIMEOUT_DEFAULT}) — a big input "
+                         f"to a remote model needs a bigger one")
     ap.add_argument("--locality", choices=sorted(cog_binding.LOCALITIES),
                     help="override the preset's locality classification")
     ap.add_argument("--insecure-http", action="store_true",
@@ -109,6 +94,7 @@ def main():
         print(f"model    : {record['model']}")
         print(f"format   : {record.get('response_format') or 'none'}")
         print(f"locality : {record.get('locality')}")
+        print(f"timeout  : {cog_binding.request_timeout(record)}s")
         print(f"pinned   : {record.get('pinned')}")
         print(f"key      : {'set' if key else 'NOT SET'}")
         print(f"source   : {source}")
@@ -139,8 +125,7 @@ def main():
     if not cfg.get("endpoint"):
         ap.error("--endpoint is required when no preset is given")
     if ".invalid" in cfg["endpoint"]:
-        print("the collab preset needs the real endpoint once:")
-        print("  pixi run use collab --endpoint http://YOUR-COLLAB-HOST/v1")
+        print("Supply a real endpoint; reserved .invalid addresses cannot be bound.")
         sys.exit(1)
 
     # --- contract checks, before anything is written -------------------------------
@@ -155,6 +140,12 @@ def main():
     if not ok:
         sys.exit(f"transport check: {reason}")
 
+    timeout = (cog_binding.REQUEST_TIMEOUT_DEFAULT if args.timeout is None
+               else args.timeout)
+    timeout_bad = cog_binding.timeout_problems(timeout)
+    if timeout_bad:
+        sys.exit("timeout check: " + "; ".join(timeout_bad))
+
     record = {
         "record": cog_binding.RECORD_SCHEMA,
         "capability": "model-endpoint/openai-compatible",
@@ -163,6 +154,7 @@ def main():
         "api_key_env": cfg.get("api_key_env"),
         "response_format": cfg.get("response_format"),
         "locality": cfg["locality"],
+        "request_timeout_s": timeout,
         "pinned": bool(args.revision),
         "satisfier": {
             "source": f"use-preset:{args.preset}" if args.preset else "use-custom",
@@ -184,6 +176,7 @@ def main():
     print(f"  model    : {cfg['model']}")
     print(f"  format   : {cfg.get('response_format') or 'none'}")
     print(f"  locality : {cfg['locality']} (manifest constraint: {constraint})")
+    print(f"  timeout  : {timeout}s (caller deadline for one model call)")
     print(f"  pinned   : {record['pinned']} (served model)"
           + ("" if record["pinned"] else "  — pass --revision to pin the served model"))
     if note:

@@ -1,21 +1,26 @@
 """Model-free deterministic suite for cog-collab-docs-drafter (created by cog-smith).
 
 Covers: manifest consistency, schema/example agreement, envelope mechanics,
-salvage and identity matching (from the starter), plus this Cog's own input
-checks, prompt rendering, and every output contract check in task_logic.py.
-The model-backed path is covered by the fixtures in evals/.
+salvage, identity matching, binding deadlines and input severity (from the
+starter), plus this Cog's own input checks, prompt rendering, the packaged
+Frame, and every output contract check in task_logic.py. The model-backed
+path is covered by the fixtures in evals/.
 """
+import contextlib
 import copy
+import io
 import json
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+import cog_binding  # noqa: E402
 import cog_core     # noqa: E402
 import task_logic   # noqa: E402
 
@@ -38,9 +43,47 @@ def checks(problems, severity=None):
     return {p["check"] for p in problems if severity is None or p["severity"] == severity}
 
 
+def errors(problems):
+    return [p for p in problems if p["severity"] == "error"]
+
+
+FRAME = ROOT / "frames" / "collab-release-documentation-quality.frame.md"
+
+
+class _FakeResponse(io.BytesIO):
+    """Just enough of an http.client.HTTPResponse for urlopen's caller."""
+
+    status = 200
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+@contextlib.contextmanager
+def canned_model(content):
+    """Run the Cog against a canned model reply — no model, no network — so
+    the deterministic suite exercises the FULL invocation path (render,
+    parse, validate, envelope). Same helper as cog-smith's starter."""
+    payload = {"model": cog_core.MODEL,
+               "choices": [{"message": {"role": "assistant",
+                                        "content": content}}]}
+
+    def _urlopen(request, timeout=None):
+        return _FakeResponse(json.dumps(payload).encode())
+
+    with mock.patch.object(cog_core, "health",
+                           lambda *a, **k: (True, "canned model")), \
+         mock.patch.object(cog_core.urllib.request, "urlopen", _urlopen):
+        yield
+
+
 class TestManifestConsistency(unittest.TestCase):
     def setUp(self):
-        self.manifest = yaml.safe_load((ROOT / "cog.yaml").read_text())
+        # either format: [tool.cog] in pixi.toml, or cog.yaml
+        self.manifest = cog_binding.load_manifest(ROOT)
 
     def test_identity_fields(self):
         for field in ("schema", "id", "version", "kind", "summary", "owner",
@@ -53,7 +96,8 @@ class TestManifestConsistency(unittest.TestCase):
         front = yaml.safe_load(text.split("---")[1])
         self.assertEqual(front["name"], self.manifest["id"].split("/")[1])
         self.assertEqual(front["version"], self.manifest["version"])
-        self.assertEqual(front["manifest"], "cog.yaml")
+        self.assertEqual(front["manifest"], "pixi.toml")
+        self.assertFalse((ROOT / "cog.yaml").exists(), "a package carries exactly one manifest")
 
     def test_declared_context_files_exist(self):
         ctx = self.manifest.get("context") or {}
@@ -75,11 +119,16 @@ class TestManifestConsistency(unittest.TestCase):
         for f in (self.manifest.get("evaluation") or {}).get("fixtures") or []:
             self.assertTrue((ROOT / f).exists(), f)
 
-    def test_declared_satisfiers_exist(self):
-        for req in self.manifest.get("requires") or []:
-            specs = [req.get("satisfied_by")] + (req.get("also_satisfied_by") or [])
-            for spec in filter(None, specs):
-                self.assertTrue((ROOT / spec["source"] / "cog.yaml").exists(), spec["source"])
+    def test_model_requirement_is_local_only(self):
+        # Private evidence must not reach an external provider until the team
+        # approves one, so binding is restricted to local endpoints.
+        (req,) = self.manifest["requires"]
+        self.assertEqual(req["capability"], "model-endpoint/openai-compatible")
+        self.assertEqual(req["locality"], "local")
+        self.assertEqual(req["satisfied_by"]["cog"], "openteams/cog-qwen")
+        self.assertTrue(cog_binding.locality_allowed(req["locality"], "local"))
+        self.assertFalse(cog_binding.locality_allowed(req["locality"], "cloud"))
+        self.assertFalse(cog_binding.locality_allowed(req["locality"], "customer-vpc"))
 
     def test_private_evidence_is_never_declared(self):
         declared = (self.manifest.get("evaluation") or {}).get("fixtures") or []
@@ -92,10 +141,10 @@ class TestSchemasAndExamples(unittest.TestCase):
         self.assertEqual(cog_core.validate_input(sample_bundle()), [])
 
     def test_declared_fixture_bundles_pass_input_validation(self):
-        manifest = yaml.safe_load((ROOT / "cog.yaml").read_text())
+        manifest = cog_binding.load_manifest(ROOT)
         for f in manifest["evaluation"]["fixtures"]:
             fx = yaml.safe_load((ROOT / f).read_text())
-            self.assertEqual(cog_core.validate_input(load(fx["bundle"])), [], f)
+            self.assertEqual(errors(cog_core.validate_input(load(fx["bundle"]))), [], f)
 
     def test_output_example_passes_output_validation(self):
         example = load("context/output-example.json")
@@ -140,10 +189,41 @@ class TestInputChecks(unittest.TestCase):
         self.assertTrue(any("nothing establishes what changed" in p["detail"]
                             for p in task_logic.check_input(bundle)))
 
-    def test_missing_target_commit_does_not_refuse_the_run(self):
+    def test_missing_target_commit_is_a_warning_not_a_refusal(self):
         bundle = sample_bundle()
         del bundle["release"]["target_commit"]
-        self.assertEqual(cog_core.validate_input(bundle), [])
+        problems = cog_core.validate_input(bundle)
+        self.assertEqual(errors(problems), [])
+        self.assertTrue(any("target_commit is missing" in p["detail"] for p in problems))
+        example, _ = worked_example()
+        with canned_model(json.dumps(example)):
+            env = cog_core.invoke(bundle)
+        self.assertTrue(env["ok"], env.get("error"))
+        self.assertTrue(any("target_commit is missing" in p["detail"] for p in env["problems"]))
+
+
+class TestPackagedFrame(unittest.TestCase):
+    def setUp(self):
+        self.manifest = cog_binding.load_manifest(ROOT)
+        text = FRAME.read_text()
+        self.front = yaml.safe_load(text.split("---")[1])
+
+    def test_frame_is_declared_and_packaged(self):
+        self.assertEqual(self.manifest["frames"],
+                         ["frames/collab-release-documentation-quality.frame.md"])
+        self.assertTrue(FRAME.exists())
+
+    def test_frame_has_the_required_v0_2_fields(self):
+        for field in ("type", "name", "description", "visibility"):
+            self.assertIn(field, self.front)
+        self.assertEqual(self.front["type"], "frame [0.2]")
+
+    def test_system_prompt_names_the_packaged_frame_version(self):
+        # When the Frame changes, its version changes, and this fails until
+        # context/system.md is brought back in line with it.
+        system = (ROOT / "context" / "system.md").read_text()
+        self.assertIn(self.front["name"], " ".join(system.split()))
+        self.assertIn(f"version {self.front['version']}", system)
 
 
 class TestRenderInput(unittest.TestCase):
@@ -249,6 +329,43 @@ class TestOutputContractChecks(unittest.TestCase):
         problems = self.run_checks(lambda o: o["intro"].update(source_ids=[]))
         self.assertTrue(any("intro cites no sources" in p["detail"] for p in problems))
 
+    # Grounding failure in the prose itself (Prakriti's evaluation case).
+    def test_invented_ui_label_in_a_body_fails_grounding(self):
+        def mutate(o):
+            o["entries"][0]["body"] += " Open **History → Filters** to choose one."
+        problems = self.run_checks(mutate)
+        self.assertTrue(any("History → Filters" in p["detail"] and p["check"] == "grounding"
+                            for p in problems))
+
+    def test_invented_ui_label_in_a_title_fails_grounding(self):
+        problems = self.run_checks(lambda o: o["entries"][1].update(title="**Stay signed in** fix"))
+        self.assertIn("grounding", checks(problems))
+
+    def test_invented_label_in_the_intro_fails_grounding(self):
+        problems = self.run_checks(lambda o: o["intro"].update(
+            text="Collab Desktop 2.4.1 adds **Smart History**."))
+        self.assertTrue(any("Smart History" in p["detail"] for p in problems))
+
+    def test_label_from_an_uncited_source_fails(self):
+        # **Reconnect** exists in pr-102, but entry 0 cites only pr-101/issue-99.
+        def mutate(o):
+            o["entries"][0]["body"] += " It never shows **Reconnect**."
+        self.assertIn("grounding", checks(self.run_checks(mutate)))
+
+    # Incorrect metadata source (Prakriti's evaluation case).
+    def test_release_date_from_a_pull_request_fails(self):
+        self.bundle["sources"][0]["text"] += "\nRelease planned for 2026-05-06."
+        problems = self.run_checks(lambda o: o["release"].update(source_ids=["pr-101"]))
+        self.assertIn("metadata-source", checks(problems))
+
+    def test_download_cited_from_a_pull_request_fails(self):
+        self.bundle["sources"][0]["text"] += "\nBuilds collab-desktop-macos.dmg."
+        def mutate(o):
+            o["downloads"][0]["source_ids"] = ["pr-101"]
+        problems = self.run_checks(mutate)
+        self.assertTrue(any(p["check"] == "metadata-source" and "collab-desktop-macos.dmg" in p["detail"]
+                            for p in problems))
+
 
 class TestEnvelopeMechanics(unittest.TestCase):
     def test_envelope_shape(self):
@@ -311,6 +428,63 @@ class TestSalvageAndIdentity(unittest.TestCase):
         self.assertFalse(cog_core.models_match("m-1-malicious", "m-1"))
         self.assertTrue(cog_core.models_match("alias-x", "m-1", aliases=["alias-x"]))
         self.assertFalse(cog_core.models_match("", "m-1"))
+
+
+class TestFullInvocation(unittest.TestCase):
+    """The contract through the real invocation path, not just `ok`."""
+
+    def test_worked_example_runs_clean_end_to_end(self):
+        example, bundle = worked_example()
+        with canned_model(json.dumps(example)):
+            env = cog_core.invoke(bundle)
+        self.assertTrue(env["ok"], env.get("error"))
+        self.assertEqual(env["payload"]["release"]["version"], "2.4.1")
+        self.assertEqual(env["problems"], [])
+
+    def test_copying_the_worked_example_is_caught(self):
+        # A model that copies the example instead of reading the bundle.
+        example, _ = worked_example()
+        with canned_model(json.dumps(example)):
+            env = cog_core.invoke(sample_bundle())
+        self.assertTrue(env["ok"])
+        found = checks(env["problems"])
+        self.assertTrue({"identity", "citation", "grounding", "coverage"} <= found, found)
+
+    def test_unparseable_reply_is_a_named_error(self):
+        with canned_model("Here are your release notes: ..."):
+            env = cog_core.invoke(sample_bundle())
+        self.assertFalse(env["ok"])
+        self.assertEqual(env["error"]["code"], "model-response-malformed")
+
+    def test_input_errors_refuse_before_the_model(self):
+        bundle = sample_bundle()
+        bundle["sources"].append(dict(bundle["sources"][0]))   # duplicate id
+        with mock.patch.object(cog_core, "health") as work:
+            env = cog_core.invoke(bundle)
+        work.assert_not_called()
+        self.assertEqual(env["error"]["code"], "invalid-input")
+
+    def test_the_binding_deadline_is_what_invoke_uses(self):
+        seen = {}
+
+        def _urlopen(request, timeout=None):
+            seen["timeout"] = timeout
+            return _FakeResponse(json.dumps(
+                {"model": cog_core.MODEL,
+                 "choices": [{"message": {"content": "{}"}}]}).encode())
+
+        with mock.patch.object(cog_core, "health",
+                               lambda *a, **k: (True, "canned model")), \
+             mock.patch.object(cog_core.urllib.request, "urlopen", _urlopen):
+            cog_core.invoke(sample_bundle())
+            self.assertEqual(seen["timeout"], cog_core.REQUEST_TIMEOUT_S)
+            cog_core.invoke(sample_bundle(), timeout=600)
+            self.assertEqual(seen["timeout"], 600)
+
+    def test_an_out_of_bounds_deadline_is_refused_by_name(self):
+        env = cog_core.invoke(sample_bundle(), timeout=1)
+        self.assertFalse(env["ok"])
+        self.assertEqual(env["error"]["code"], "invalid-timeout")
 
 
 if __name__ == "__main__":

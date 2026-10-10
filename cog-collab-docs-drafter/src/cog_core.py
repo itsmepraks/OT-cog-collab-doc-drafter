@@ -1,7 +1,7 @@
 """Shared core for this Cog's interfaces (cog-smith machinery, generic).
 
-Derived from cog-forge @7fe8aca (engineering-gates PASS). Deltas from the
-forge original are deliberate and documented in cog-smith's
+Derived from an earlier internal package (not distributed). Deltas from that
+original are deliberate and documented in cog-smith's
 MACHINERY.md: (1) all task-specific logic lives in task_logic.py — this file
 is byte-identical across created Cogs and copy-sync-checked by `smith check`;
 (2) input validation runs against the manifest-declared input schema;
@@ -40,6 +40,9 @@ RECORD, API_KEY, BINDING_SOURCE = cog_binding.load_record(ROOT)
 ENDPOINT = RECORD["endpoint"]
 MODEL = RECORD["model"]
 RESPONSE_FORMAT = RECORD.get("response_format")
+# The caller's deadline comes from the binding, not from this file (see
+# cog_binding.REQUEST_TIMEOUT_*). `cog_cli --timeout` overrides it for one call.
+REQUEST_TIMEOUT_S = cog_binding.request_timeout(RECORD)
 
 OUTPUT_SCHEMA = json.loads((ROOT / "context" / "output-schema.json").read_text())
 _declared_input = (MANIFEST.get("context") or {}).get("input_schema")
@@ -57,7 +60,7 @@ def problem(check, detail, severity="error"):
 
 def load_context():
     """System prompt: instructions + a fully WORKED EXAMPLE (small models copy
-    examples reliably and interpret schemas poorly — cog-demo finding 3).
+    examples reliably and interpret schemas poorly — an earlier finding).
     output-schema.json remains the normative contract."""
     system = (ROOT / "context" / "system.md").read_text()
     example = (ROOT / "context" / "output-example.json").read_text()
@@ -176,10 +179,22 @@ def validate_output(parsed, bundle):
 
 # ------------------------------------------------------------------ health --
 
-def health(timeout=3, deep=False):
-    """Is the model dependency reachable? Returns (ok, detail)."""
+def health(timeout=3, deep=False, deep_timeout=None):
+    """Is the model dependency reachable? Returns (ok, detail).
+
+    Two probes with two deadlines (machinery 0.4.1). The SHALLOW liveness
+    probe keeps `timeout` — a socket that has not answered in three seconds
+    is not alive, and waiting longer tells nobody anything. The DEEP probe
+    performs a real completion, so it is the same kind of call `invoke`
+    makes and takes the same kind of time: `deep_timeout`, when given, is an
+    explicit override (`cog_cli --check --deep --timeout N`) and is used as
+    stated. Without one the deep probe keeps its own floor of 30 s. Before
+    0.4.1 the override was accepted and silently dropped, so a completion
+    probe that needed 40 s reported DOWN.
+    """
     base = ENDPOINT.rstrip("/")
     if deep:
+        deadline = deep_timeout if deep_timeout is not None else max(timeout, 30)
         body = {"model": MODEL, "max_tokens": 1,
                 "messages": [{"role": "user", "content": "ping"}]}
         req = urllib.request.Request(
@@ -188,7 +203,7 @@ def health(timeout=3, deep=False):
         if API_KEY:
             req.add_header("Authorization", f"Bearer {API_KEY}")
         try:
-            with urllib.request.urlopen(req, timeout=max(timeout, 30)) as resp:
+            with urllib.request.urlopen(req, timeout=deadline) as resp:
                 payload = json.loads(resp.read().decode())
             echoed = payload.get("model")
             if not echoed:
@@ -259,23 +274,40 @@ def _fail(task, code, detail, binding=None):
                      problems=[problem(code, detail)], binding=binding)
 
 
-def invoke(bundle, timeout=180, task="ask"):
-    """Run this Cog against an input bundle. Returns an envelope-v1 dict."""
+def invoke(bundle, timeout=None, task="ask"):
+    """Run this Cog against an input bundle. Returns an envelope-v1 dict.
+
+    `timeout` is the caller's deadline for the model call, in seconds. None
+    means "what the binding says" (`request_timeout_s`, default 180); an
+    explicit value is a one-call override and is bounds-checked like any other.
+    """
+    if timeout is None:
+        timeout = REQUEST_TIMEOUT_S
+    else:
+        bad = cog_binding.timeout_problems(timeout)
+        if bad:
+            return _fail(task, "invalid-timeout", "; ".join(bad))
     violations = RECORD.get("_violations")
     if violations:
         # Fail closed BEFORE anything can leave the machine.
         return _fail(task, "binding-invalid", violations)
 
     input_problems = validate_input(bundle)
-    if input_problems:
+    refusing = [p for p in input_problems if p.get("severity") not in ("warning", "warn")]
+    if refusing:
         env = _fail(task, "invalid-input",
-                    "; ".join(p["detail"] for p in input_problems[:5]))
+                    "; ".join(p["detail"] for p in refusing[:5]))
         env["problems"] = input_problems
+        return env
+
+    def fail(*args, **kwargs):
+        env = _fail(*args, **kwargs)
+        env["problems"] = input_problems + env["problems"]
         return env
 
     ok, detail = health()
     if not ok:
-        return _fail(task, "model-unavailable", detail)
+        return fail(task, "model-unavailable", detail)
 
     rendered = task_logic.render_input(bundle)
     if RECORD.get("locality") != "local":
@@ -311,24 +343,24 @@ def invoke(bundle, timeout=180, task="ask"):
             payload = json.loads(resp.read().decode())
     except (urllib.error.HTTPError, urllib.error.URLError, OSError,
             json.JSONDecodeError) as e:
-        return _fail(task, "model-call-failed", repr(e))
+        return fail(task, "model-call-failed", repr(e))
 
     try:
         text = payload["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError):
-        return _fail(task, "model-response-malformed",
-                     f"unexpected provider payload shape: {str(payload)[:300]}",
-                     binding=_binding_report(payload.get("model")
-                                             if isinstance(payload, dict) else None))
+        return fail(task, "model-response-malformed",
+                    f"unexpected provider payload shape: {str(payload)[:300]}",
+                    binding=_binding_report(payload.get("model")
+                                            if isinstance(payload, dict) else None))
 
     parsed = extract_json(text)
     if parsed is None:
-        # F3 (review 2026-08-22): content that exists but is not parseable
+        # Content that exists but is not parseable
         # JSON is a malformed upstream response — documented error code and
         # a 5xx at the HTTP layer, never a bare 200. Raw text retained.
-        env = _fail(task, "model-response-malformed",
-                    "model content did not parse as JSON",
-                    binding=_binding_report(payload.get("model")))
+        env = fail(task, "model-response-malformed",
+                   "model content did not parse as JSON",
+                   binding=_binding_report(payload.get("model")))
         env["raw"] = text
         env["timing"]["latency_s"] = round(time.monotonic() - started, 3)
         return env
@@ -338,7 +370,7 @@ def invoke(bundle, timeout=180, task="ask"):
     # emitted. The unwrapping fact travels in binding.unwrapped only.
     unwrapped = parsed.pop("_unwrapped_from", None)
 
-    problems = validate_output(parsed, bundle)
+    problems = input_problems + validate_output(parsed, bundle)
     echoed = payload.get("model")
     if not echoed:
         identity = "unverified"

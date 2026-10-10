@@ -1,5 +1,5 @@
-"""Shared binding-record machinery. Byte-identical across the cog-forge Cogs;
-tools/check_copies.py enforces the sync.
+"""Shared binding-record machinery. Byte-identical across the Cogs that vendor
+it; `smith check` enforces the sync by hash.
 
 One binding-record shape for BOTH paths (`resolve` and `use`), and ONE
 fail-closed normalization for everything that can influence the binding —
@@ -22,6 +22,15 @@ import yaml
 
 RECORD_SCHEMA = "openteams/binding-record [0.1]"
 
+# The caller's deadline for one model call is a BINDING fact, not a constant:
+# a 3B model on loopback and a cloud model asked to read 160k characters do not
+# share a deadline (a live sweep in which a 161,000-character request outran
+# a hard-coded 180 s). It is written by `use --timeout` / `resolve --timeout`,
+# carried in the record, and overridable for one call by `cog_cli --timeout`.
+REQUEST_TIMEOUT_DEFAULT = 180
+REQUEST_TIMEOUT_MIN = 10
+REQUEST_TIMEOUT_MAX = 1800
+
 DEFAULTS = {
     "record": RECORD_SCHEMA,
     "capability": "model-endpoint/openai-compatible",
@@ -30,6 +39,7 @@ DEFAULTS = {
     "api_key_env": None,
     "response_format": "json_object",
     "locality": "local",
+    "request_timeout_s": REQUEST_TIMEOUT_DEFAULT,
     "pinned": False,
     "satisfier": {"source": "default",
                   "note": "built-in default; run resolve or use to bind explicitly"},
@@ -41,10 +51,67 @@ _LOOPBACK = {"127.0.0.1", "localhost", "::1", "[::1]"}
 
 
 # ---------------------------------------------------------------- manifest --
+#
+# The profile manifest (openteams/cog-manifest [0.1]) lives in ONE of:
+#   - pixi.toml under [tool.cog]  (default; cog-execution ADR D9) — `version`
+#     and `summary` may be omitted there and fall back to [workspace]
+#     version / description, so each is stated once;
+#   - cog.yaml                     (the standalone YAML form).
+# Same rules as cog-smith's smith_manifest.py — kept in step by hand because
+# machinery is copied verbatim into every Cog and cannot import smith.
+
+MANIFEST_TOOL_TABLE = "cog"
+
+
+def _read_pixi_manifest(root):
+    p = Path(root) / "pixi.toml"
+    if not p.exists():
+        return None
+    try:
+        import tomllib
+    except ImportError as e:                          # Python < 3.11
+        raise RuntimeError("reading a [tool.cog] manifest in pixi.toml needs "
+                           "Python 3.11+ (tomllib)") from e
+    with open(p, "rb") as f:
+        doc = tomllib.load(f)
+    tool = doc.get("tool")
+    if not (isinstance(tool, dict) and isinstance(tool.get(MANIFEST_TOOL_TABLE), dict)):
+        return None
+    m = dict(tool[MANIFEST_TOOL_TABLE])
+    ws = doc.get("workspace") or doc.get("project") or {}
+    if "version" not in m and ws.get("version") is not None:
+        m["version"] = ws["version"]
+    if "summary" not in m and ws.get("description") is not None:
+        m["summary"] = ws["description"]
+    return m
+
+
+def manifest_path(root):
+    """The file this Cog's manifest lives in (pixi.toml or cog.yaml), or None."""
+    root = Path(root)
+    if _read_pixi_manifest(root) is not None:
+        return root / "pixi.toml"
+    if (root / "cog.yaml").exists():
+        return root / "cog.yaml"
+    return None
+
 
 def load_manifest(root):
-    """This Cog's own cog.yaml: identity and declared requirements."""
-    return yaml.safe_load((Path(root) / "cog.yaml").read_text())
+    """This Cog's own manifest: identity and declared requirements.
+    Raises FileNotFoundError when the package carries neither form, and
+    ValueError when it carries both (readers could disagree about the Cog)."""
+    root = Path(root)
+    pixi = _read_pixi_manifest(root)
+    yaml_path = root / "cog.yaml"
+    if pixi is not None and yaml_path.exists():
+        raise ValueError(f"{root}: both pixi.toml [tool.cog] and cog.yaml are "
+                         f"present — a package carries exactly one manifest")
+    if pixi is not None:
+        return pixi
+    if yaml_path.exists():
+        return yaml.safe_load(yaml_path.read_text()) or {}
+    raise FileNotFoundError(f"{root}: no manifest — neither pixi.toml with a "
+                            f"[tool.cog] table nor cog.yaml")
 
 
 def declared_locality_constraint(manifest):
@@ -133,6 +200,7 @@ _OPTIONAL_FIELDS = {
     "response_format": (str, type(None)),
     "insecure_http": bool,
     "model_aliases": list,
+    "request_timeout_s": int,
 }
 _SERVED_FIELDS = {
     "revision": (str, type(None)),
@@ -163,6 +231,30 @@ def served_pin_evidence(served):
     return bool(served.get("revision")
                 or _is_digest(served.get("weights_sha256"))
                 or _is_digest(served.get("effective_sha256")))
+
+
+def timeout_problems(value):
+    """Problems with a caller-deadline value, as a list. The ONE bounds rule —
+    the record validator, `use`, `resolve` and the CLI override must agree
+    about what a deadline may be (a deadline nobody can meet and a deadline
+    that never expires are both unusable)."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        return [f"request_timeout_s must be an integer number of seconds, got "
+                f"{type(value).__name__}"]
+    if not (REQUEST_TIMEOUT_MIN <= value <= REQUEST_TIMEOUT_MAX):
+        return [f"request_timeout_s {value} is outside "
+                f"{REQUEST_TIMEOUT_MIN}–{REQUEST_TIMEOUT_MAX} seconds"]
+    return []
+
+
+def request_timeout(record):
+    """The caller deadline this binding states, in seconds. A record written
+    before the field existed has none, and inherits the default rather than
+    failing — the field is optional in the record schema."""
+    value = (record or {}).get("request_timeout_s")
+    if timeout_problems(value):
+        return REQUEST_TIMEOUT_DEFAULT
+    return value
 
 
 def validate_record(record):
@@ -207,6 +299,8 @@ def validate_record(record):
         problems.append(f"unknown response_format {rf!r}")
     if record.get("locality") not in LOCALITIES:
         problems.append(f"unknown locality {record.get('locality')!r}")
+    if "request_timeout_s" in record:
+        problems.extend(timeout_problems(record["request_timeout_s"]))
     # the invariant itself: pinned <=> evidence
     if bool(record.get("pinned")) != served_pin_evidence(record.get("served_model")):
         if record.get("pinned"):
@@ -243,7 +337,7 @@ def load_record(root, environ=None):
 
     Fail-closed invariants, enforced here for EVERY path:
       - a malformed model.json is a violation, never a silent fallback to a
-        different model (cog-demo finding 1: silent model drift);
+        different model (an earlier finding: silent model drift);
       - an endpoint override invalidates the pin and satisfier, recomputes
         locality (loopback -> local, else COG_MODEL_LOCALITY or cloud), and
         downgrades a json_schema decoder guarantee it can no longer promise;

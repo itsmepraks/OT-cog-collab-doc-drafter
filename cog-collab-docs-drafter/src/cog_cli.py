@@ -3,8 +3,10 @@
 this). Same Cog as the web API, second interface.
 
     pixi run ask -- --bundle examples/sample-bundle.json
+    pixi run ask -- --bundle big.json --timeout 600   # one-call deadline override
     pixi run ask -- --check          # health probe
     pixi run ask -- --check --deep   # proves the key works + identity echo
+    pixi run ask -- --check --deep --timeout 600   # slow completion probe
 """
 import argparse
 import json
@@ -22,17 +24,32 @@ def main():
     ap.add_argument("--deep", action="store_true",
                     help="with --check: end-to-end model ping incl. identity")
     ap.add_argument("--raw", action="store_true", help="print the raw model text")
+    ap.add_argument("--timeout", type=int, metavar="N",
+                    help=f"override the binding's caller deadline for THIS call, "
+                         f"in seconds ({cog_core.cog_binding.REQUEST_TIMEOUT_MIN}–"
+                         f"{cog_core.cog_binding.REQUEST_TIMEOUT_MAX}); the "
+                         f"binding says {cog_core.REQUEST_TIMEOUT_S}s. With "
+                         f"--check --deep it is the completion probe's deadline; "
+                         f"the shallow liveness probe keeps its short one")
     args = ap.parse_args()
 
+    if args.timeout is not None:
+        bad = cog_core.cog_binding.timeout_problems(args.timeout)
+        if bad:
+            ap.error("; ".join(bad))
+
     if args.check:
-        ok, detail = cog_core.health(deep=args.deep)
+        # The deep probe is a real completion and honors an explicit deadline
+        # (machinery 0.4.1); the shallow one is liveness and keeps its own.
+        ok, detail = cog_core.health(deep=args.deep,
+                                     deep_timeout=args.timeout if args.deep else None)
         print(("OK " if ok else "DOWN ") + detail)
         return 0 if ok else 1
 
     if not args.bundle:
         ap.error("--bundle is required (or use --check)")
     bundle = json.loads(Path(args.bundle).read_text())
-    result = cog_core.invoke(bundle)
+    result = cog_core.invoke(bundle, timeout=args.timeout)
 
     if args.raw:
         print(result.get("raw") or "")

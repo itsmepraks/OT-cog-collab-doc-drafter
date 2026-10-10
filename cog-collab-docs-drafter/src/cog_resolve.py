@@ -7,7 +7,7 @@
 
     # bind an ALTERNATE declared satisfier — e.g. the Collab deployment
     # descriptor, whose address is an installation fact:
-    pixi run resolve -- --satisfier ../cog-collab-qwen35b \
+    pixi run resolve -- --satisfier ../cog-qwen \
         --endpoint http://YOUR-COLLAB-HOST/v1 [--insecure-http]
 
 The Cog declares a capability it needs; `satisfied_by` names the default
@@ -32,7 +32,8 @@ Response-format negotiation: `model-endpoint/openai-compatible` does NOT imply
 schema-constrained decoding — that is a llama.cpp extension, not part of the
 capability. The resolver grants json_schema only when the satisfier's declared
 runtime is known to support it, and falls back to json_object otherwise.
-Byte-identical across the cog-forge Cogs; tools/check_copies.py enforces it.
+Byte-identical across the Cogs that vendor it; `smith check` enforces it
+by hash.
 """
 import argparse
 import hashlib
@@ -53,13 +54,14 @@ SCHEMA_CAPABLE_RUNTIMES = {"llama.cpp", "llama-server"}
 
 
 def load_cog(path):
-    manifest = Path(path) / "cog.yaml"
-    if not manifest.exists():
-        return None, f"no cog.yaml at {manifest}"
+    """(manifest, error) for the Cog at path — either manifest format
+    (pixi.toml [tool.cog] or cog.yaml; see cog_binding.load_manifest)."""
     try:
-        return yaml.safe_load(manifest.read_text()), None
-    except yaml.YAMLError as e:
-        return None, f"{manifest} is not valid YAML: {e}"
+        return cog_binding.load_manifest(path), None
+    except FileNotFoundError:
+        return None, f"no manifest (pixi.toml [tool.cog] or cog.yaml) at {path}"
+    except (ValueError, yaml.YAMLError) as e:
+        return None, f"{path}: unreadable manifest: {e}"
 
 
 def served_model_pin(model):
@@ -69,7 +71,7 @@ def served_model_pin(model):
       - simple weights:   model.weights.sha256           -> digest pin
       - deployment:       model.revision                 -> revision pin
       - composed/derived: model.base.sha256 + model.specialization.sha256 +
-                          effective_id (the cog-demo LoRA shape) -> an
+                          effective_id (a LoRA-derived model id) -> an
                           effective digest over every load-bearing lineage
                           component. Lineage is recorded, not flattened away.
 
@@ -291,6 +293,9 @@ def resolve_one(req, locality_constraint, args):
         "api_key_env": default.get("api_key_env"),
         "response_format": response_format,
         "locality": locality,
+        "request_timeout_s": (cog_binding.REQUEST_TIMEOUT_DEFAULT
+                              if getattr(args, "timeout", None) is None
+                              else args.timeout),
         "pinned": served_pinned,
         "satisfier": {
             "source": "resolve" + ("+undeclared" if undeclared else ""),
@@ -341,9 +346,19 @@ def main():
                     help="permit a satisfier the manifest does not declare — the "
                          "binding records satisfier.declared: false; pin evidence "
                          "is reported independently")
+    ap.add_argument("--timeout", type=int, metavar="N",
+                    help=f"caller deadline for one model call, in seconds "
+                         f"({cog_binding.REQUEST_TIMEOUT_MIN}–"
+                         f"{cog_binding.REQUEST_TIMEOUT_MAX}; default "
+                         f"{cog_binding.REQUEST_TIMEOUT_DEFAULT})")
     ap.add_argument("--start", action="store_true", help="start the dependency after resolving")
     ap.add_argument("--dry-run", action="store_true", help="report only; write nothing")
     args = ap.parse_args()
+
+    if args.timeout is not None:
+        bad = cog_binding.timeout_problems(args.timeout)
+        if bad:
+            sys.exit("timeout check: " + "; ".join(bad))
 
     me, err = load_cog(ROOT)
     if err:
@@ -386,7 +401,8 @@ def main():
         served_note = f"served model pinned (weights sha256 {served['weights_sha256'][:12]}…)"
     else:
         served_note = "served model UNPINNED — declare a deployment revision to pin it"
-    print(f"\nwrote model.json — package pin {pin}; {served_note}")
+    print(f"\nwrote model.json — package pin {pin}; {served_note}; "
+          f"caller deadline {cog_binding.request_timeout(record)}s")
 
     env = record.get("api_key_env")
     if env:

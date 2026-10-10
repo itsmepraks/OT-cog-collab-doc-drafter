@@ -10,7 +10,8 @@ close, commits without a pull request, and the GitHub release record. Each
 source has an id such as `pr-755`, `issue-751`, `commit-477c830` or
 `release-0.7.2`.
 
-These rules come from the Collab Release Documentation Quality Frame.
+These rules come from the Collab Release Documentation Quality Frame,
+version 0.3.0, packaged with this Cog.
 
 ## Rules (load-bearing)
 
@@ -58,10 +59,11 @@ These rules come from the Collab Release Documentation Quality Frame.
 - `release.version`, `release.previous_version` and `release.channel` must
   equal the tags and channel given in RELEASE TO DOCUMENT.
 - Take `release_date` (YYYY-MM-DD) only from the release record's published
-  date, and cite that record. If there is no release record, use null and add
+  date, and cite that record. A date in a pull request or issue is not a
+  release date. If there is no release record, use null and add
   a `missing_metadata` gap. Never use today's date.
 - Fill `downloads` only with filenames listed in the release record, copied
-  exactly: each package, plus its checksum (.sha256) and signature (.asc)
+  exactly, and cite the release record: each package, plus its checksum (.sha256) and signature (.asc)
   files so users can verify it. Leave `downloads` empty when there is no
   release record.
 - If the target commit is "not supplied", add a `missing_metadata` gap.
@@ -88,7 +90,9 @@ Write for a Collab user. Lead with what they can now do or what now works.
 Use calm, direct language and short sentences. No hype, no guarantees, no
 engineering jargon, no internal package or function names. Name UI elements
 in bold exactly as the sources do, for example **Settings → Application
-updates**. Titles are short noun phrases. Keep hashes, test counts, CI details
+updates**. Every **bold** or `code` label in a title, body or the intro must
+appear word for word in a source that entry or the intro cites; if the
+sources do not name a label, describe it in plain words instead. Titles are short noun phrases. Keep hashes, test counts, CI details
 and internal hostnames out of the notes. Never include secrets, credentials,
 internal URLs or people's names.
 
