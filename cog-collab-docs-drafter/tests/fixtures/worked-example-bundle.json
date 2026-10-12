@@ -1,0 +1,55 @@
+{
+  "release": {
+    "product": "Collab Desktop",
+    "repository": "example-org/collab-desktop-example",
+    "previous_tag": "2.4.0",
+    "target_tag": "2.4.1",
+    "target_commit": "5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c",
+    "channel": "stable"
+  },
+  "notes": "Synthetic bundle: the input that context/output-example.json answers. Not a real Collab release.",
+  "sources": [
+    {
+      "id": "pr-101",
+      "kind": "pull_request",
+      "title": "feat(history): search conversations by Frame name",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/101",
+      "text": "Pull request #101: feat(history): search conversations by Frame name\nMerged: 2026-05-04T10:00:00Z into main\nCommits from this pull request in the release range:\n- 1a2b3c4 feat(history): search conversations by Frame name (#101)\n\nCloses #99.\n\nHistory search only matched message text. This adds a **Frame** filter to the History search bar: choosing a Frame shows only conversations that used it. The filter list shows Frames installed in the current Hubspace.\n\n## Verification\n- unit tests for the filter reducer pass"
+    },
+    {
+      "id": "issue-99",
+      "kind": "issue",
+      "title": "Find conversations that used a specific Frame",
+      "url": "https://github.com/example-org/collab-desktop-example/issues/99",
+      "text": "Issue #99: Find conversations that used a specific Frame\nState: CLOSED\n\nUsers want to find past conversations by the Frame they used. Today they have to scroll through History."
+    },
+    {
+      "id": "pr-102",
+      "kind": "pull_request",
+      "title": "fix(connectors): keep the Google Drive connector signed in after restart",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/102",
+      "text": "Pull request #102: fix(connectors): keep the Google Drive connector signed in after restart\nMerged: 2026-05-05T14:30:00Z into main\nCommits from this pull request in the release range:\n- 2b3c4d5 fix(connectors): keep the Google Drive connector signed in after restart (#102)\n\nAfter a restart the Google Drive connector showed **Reconnect** even though the token was still valid. The connector now reuses the stored session on startup, so it stays signed in after Collab restarts.\n\nTested on macOS and Windows. Linux was not tested."
+    },
+    {
+      "id": "pr-104",
+      "kind": "pull_request",
+      "title": "ci: run the macOS build on the new runner image",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/104",
+      "text": "Pull request #104: ci: run the macOS build on the new runner image\nMerged: 2026-05-05T16:00:00Z into main\nCommits from this pull request in the release range:\n- 3c4d5e6 ci: run the macOS build on the new runner image (#104)\n\nMoves the macOS build job to the new runner image. No product code changes."
+    },
+    {
+      "id": "commit-9f8e7d6",
+      "kind": "commit",
+      "title": "test(history): cover empty search results",
+      "url": "https://github.com/example-org/collab-desktop-example/commit/9f8e7d6",
+      "text": "Commit 9f8e7d6 (no merged pull request found)\nCommitted: 2026-05-05T17:10:00Z\n\ntest(history): cover empty search results"
+    },
+    {
+      "id": "release-2.4.1",
+      "kind": "release",
+      "title": "2.4.1",
+      "url": "https://github.com/example-org/collab-desktop-example/releases/tag/2.4.1",
+      "text": "GitHub release 2.4.1 (tag 2.4.1)\nPublished: 2026-05-06T18:20:00Z\nPrerelease: false\nDraft: false\nTarget: main\nAssets:\n- collab-desktop-macos.dmg\n- collab-desktop-macos.dmg.sha256\n- collab-desktop-windows-amd64-installer.exe\n- collab-desktop-windows-amd64-installer.exe.sha256\n\nRelease body:\n(empty)"
+    }
+  ]
+}

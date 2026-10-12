@@ -1,0 +1,102 @@
+[workspace]
+name = "cog-collab-docs-drafter"
+version = "0.1.0"
+description = "Drafts Collab release notes from supplied release evidence, links every claim to its source, and flags missing or conflicting information."
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+# 3.11+: the machinery reads this file's [tool.cog] manifest with tomllib
+python = ">=3.11"
+# reads cog.yaml-format manifests and *.fixture.yaml (eval)
+pyyaml = "*"
+# normative input/output schema validation
+jsonschema = "*"
+
+[tasks]
+# --- usage ops (face users and the Op layer) ---
+ask = "python src/cog_cli.py"
+# --- lifecycle ops (face the hosting environment) ---
+# serve starts the web-api entry point: the ENDPOINT is the usage surface,
+# starting it is lifecycle (see the interface's audience note in the manifest)
+serve = "python src/cog_api.py"
+check = "python src/cog_cli.py --check"
+resolve = "python src/cog_resolve.py"
+use = "python src/cog_use.py"
+eval = "python src/cog_eval.py"
+test = "python -m unittest discover -s tests -v"
+
+# NOTE: no [activation.env] — activation variables override the shell and
+# silently pin the endpoint . Defaults live in the
+# machinery; model.json and COG_MODEL_* override them.
+
+# ---------------------------------------------------------------------------
+# Profile manifest: openteams/cog-manifest [0.1], hosted in pixi.toml under
+# [tool.cog] (cog-execution ADR D9). `version` and `summary` are stated once,
+# in [workspace] above (version / description); readers fall back to them.
+# ---------------------------------------------------------------------------
+[tool.cog]
+schema = "openteams/cog-manifest [0.1]"
+id = "openteams/cog-collab-docs-drafter"
+license = "Apache-2.0"
+kind = "context"
+owner = "bankoleebenezer111@gmail.com"
+# The editorial and evidence rules come from the Collab Release Documentation
+# Quality Frame, packaged with this Cog. CogSpec and cog-smith do not define
+# the shape of `frames` yet (Trent, Sept 2026); a path relative to the Cog root
+# is our proposal. context/system.md carries the Frame's rules to the model,
+# and tests check that both name the same Frame version.
+frames = ["frames/collab-release-documentation-quality.frame.md"]
+memory = "none"
+# Evidence-tier boundary: prohibitions are structural today (no tool grants
+# exist that could perform them); they become Guard-enforced when a hosting
+# environment supplies tools.
+prohibits = ["send_external_message", "modify_source_data", "publish_release_notes", "change_release_metadata"]
+
+[tool.cog.context]
+instructions = "context/system.md"
+input_schema = "context/input-schema.json"
+output_schema = "context/output-schema.json"
+output_example = "context/output-example.json"
+
+[tool.cog.io]
+accepts = ["release_evidence_bundle"]
+produces = ["release_notes_draft"]
+
+[tool.cog.evaluation]
+fixtures = ["evals/smoke.fixture.yaml", "evals/thin-evidence.fixture.yaml", "evals/prompt-injection.fixture.yaml", "evals/internal-only.fixture.yaml", "evals/conflicting-evidence.fixture.yaml"]
+
+# The requirement is a CAPABILITY; the named Cog is one satisfier, not the
+# only one. `pixi run resolve` verifies the candidate and writes the binding
+# record (model.json — gitignored installation state).
+#
+# locality = "local": release evidence comes from a private repository, and
+# the team has not approved sending it to an external provider. Binding to a
+# cloud or customer-vpc endpoint is refused until that changes. There is no
+# Intelligence Hub endpoint yet, so the default satisfier is the public local
+# Qwen3-4B provider (cogcloud-ai/cog-qwen), cloned beside this Cog at the
+# repository root.
+[[tool.cog.requires]]
+capability = "model-endpoint/openai-compatible"
+locality = "local"
+satisfied_by = { cog = "openteams/cog-qwen", version = ">=0.1.0", source = "../cog-qwen" }
+
+[[tool.cog.interfaces]]
+name = "web-api"
+kind = "http-json"
+task = "serve"
+endpoint = "http://127.0.0.1:8120/ask"
+audience = "usage"      # the endpoint is the usage surface; starting it is lifecycle
+default = true
+
+[[tool.cog.interfaces]]
+name = "cli"
+kind = "command"
+task = "ask"
+audience = "usage"
+
+[[tool.cog.interfaces]]
+name = "health"
+kind = "command"
+task = "check"
+audience = "lifecycle"

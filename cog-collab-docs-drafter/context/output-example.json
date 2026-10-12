@@ -1,0 +1,70 @@
+{
+  "abstained": false,
+  "abstain_reason": null,
+  "release": {
+    "version": "2.4.1",
+    "previous_version": "2.4.0",
+    "channel": "stable",
+    "release_date": "2026-05-06",
+    "source_ids": ["release-2.4.1"]
+  },
+  "intro": {
+    "text": "Collab Desktop 2.4.1 lets you filter History by Frame and keeps the Google Drive connector signed in after a restart.",
+    "source_ids": ["pr-101", "pr-102"]
+  },
+  "entries": [
+    {
+      "category": "added",
+      "title": "Filter History by Frame",
+      "body": "The History search bar now has a **Frame** filter. Choose a Frame to see only the conversations that used it. The list shows the Frames installed in your current Hubspace.",
+      "claims": [
+        {
+          "text": "History search has a Frame filter that shows only conversations that used the chosen Frame.",
+          "source_ids": ["pr-101", "issue-99"],
+          "evidence_quote": "This adds a **Frame** filter to the History search bar: choosing a Frame shows only conversations that used it."
+        },
+        {
+          "text": "The filter lists the Frames installed in the current Hubspace.",
+          "source_ids": ["pr-101"],
+          "evidence_quote": "The filter list shows Frames installed in the current Hubspace."
+        }
+      ],
+      "review": "proposed"
+    },
+    {
+      "category": "fixed",
+      "title": "Google Drive stays connected after restart",
+      "body": "The Google Drive connector no longer shows **Reconnect** after Collab restarts while your sign-in is still valid.",
+      "claims": [
+        {
+          "text": "Before the fix, Google Drive showed Reconnect after a restart even though the sign-in was still valid.",
+          "source_ids": ["pr-102"],
+          "evidence_quote": "After a restart the Google Drive connector showed **Reconnect** even though the token was still valid."
+        },
+        {
+          "text": "The connector now stays signed in after Collab restarts.",
+          "source_ids": ["pr-102"],
+          "evidence_quote": "so it stays signed in after Collab restarts"
+        }
+      ],
+      "review": "proposed"
+    }
+  ],
+  "downloads": [
+    { "platform": "macOS", "filename": "collab-desktop-macos.dmg", "source_ids": ["release-2.4.1"] },
+    { "platform": "macOS", "filename": "collab-desktop-macos.dmg.sha256", "source_ids": ["release-2.4.1"] },
+    { "platform": "Windows (AMD64)", "filename": "collab-desktop-windows-amd64-installer.exe", "source_ids": ["release-2.4.1"] },
+    { "platform": "Windows (AMD64)", "filename": "collab-desktop-windows-amd64-installer.exe.sha256", "source_ids": ["release-2.4.1"] }
+  ],
+  "excluded": [
+    { "source_ids": ["pr-104"], "reason": "ci_or_build", "note": "Build runner change with no product code changes." },
+    { "source_ids": ["commit-9f8e7d6"], "reason": "tests_only", "note": "Adds a test only." }
+  ],
+  "gaps": [
+    {
+      "kind": "missing_evidence",
+      "detail": "The Google Drive fix was tested on macOS and Windows only. Confirm Linux before the notes say it applies on every platform.",
+      "source_ids": ["pr-102"]
+    }
+  ]
+}

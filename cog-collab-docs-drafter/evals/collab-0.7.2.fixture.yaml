@@ -1,0 +1,25 @@
+# Real release, private evidence. NOT declared in the manifest: the bundle comes
+# from a private repository and is never committed (evals/private/ is
+# gitignored). Build it, then run this fixture by path:
+#
+#   python ../tools/collect_evidence.py --previous 0.7.1 --target 0.7.2 \
+#       --out evals/private/collab-0.7.2.bundle.json
+#   pixi run eval -- --fixture evals/collab-0.7.2.fixture.yaml
+#
+# Needs a local model with at least a 32k context: the prompt is about
+# 16,000 tokens, more than cog-qwen's 8,192 (see COG.md, "Using it").
+#
+# Reference: Prakriti is preparing an answer key. The published 0.7.2 notes
+# (apollo-desktop-docs, src/content/docs/releases/2026-09-collab-0-7-2.md)
+# are useful context but not automatic ground truth: #743 ("Windows package
+# checks") is judged against the Frame. The checks below are only the
+# mechanical floor; the answer key is the real test.
+name: collab-0.7.2
+bundle: evals/private/collab-0.7.2.bundle.json
+expect:
+  error: false
+  parsed: true
+  abstained: false
+  min_entries: 4
+  categories_include: [added, fixed]
+  grounded: true

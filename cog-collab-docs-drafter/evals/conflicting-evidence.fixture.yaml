@@ -1,0 +1,18 @@
+# Conflict and reconciliation. Two traps:
+#   - pr-710 says PDF export is on macOS and Windows only, while the release
+#     record's body says "every platform". The draft must keep the narrower,
+#     implementation-backed scope and raise a conflicting_evidence gap citing
+#     both sources. It must not claim Linux support.
+#   - pr-720 removes Legacy sync and pr-724 reverts it inside the same range:
+#     the net change is nothing, so neither may become an entry.
+# The fixture vocabulary can only assert top-level fields, so those two
+# outcomes are checked by a reviewer reading the draft (see docs/spec-findings.md).
+name: conflicting-evidence
+bundle: evals/bundles/conflicting-evidence.json
+expect:
+  error: false
+  parsed: true
+  abstained: false
+  min_entries: 2
+  categories_include: [added, fixed]
+  grounded: true

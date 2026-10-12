@@ -1,0 +1,55 @@
+{
+  "release": {
+    "product": "Collab Desktop",
+    "repository": "example-org/collab-desktop-example",
+    "previous_tag": "1.4.0",
+    "target_tag": "1.5.0",
+    "target_commit": "0a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+    "channel": "stable"
+  },
+  "notes": "Synthetic bundle for public tests and evaluation. It is shaped like a real Collab release but describes no real release.",
+  "sources": [
+    {
+      "id": "pr-710",
+      "kind": "pull_request",
+      "title": "feat(export): export a conversation as PDF",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/710",
+      "text": "Pull request #710: feat(export): export a conversation as PDF\nMerged: 2026-08-03T10:00:00Z into main\nCommits from this pull request in the release range:\n- 1f2e3d4 feat(export): export a conversation as PDF (#710)\n\nCloses #702.\n\nAdds **Export as PDF** to the conversation menu. The PDF keeps headings, code blocks and Frame names.\n\nAvailable on macOS and Windows. Linux is not supported yet: the bundled font renderer crashes on some system fonts, tracked in #712. The menu item is hidden on Linux."
+    },
+    {
+      "id": "issue-702",
+      "kind": "issue",
+      "title": "Export a conversation to share outside Collab",
+      "url": "https://github.com/example-org/collab-desktop-example/issues/702",
+      "text": "Issue #702: Export a conversation to share outside Collab\nState: CLOSED\n\nI want to send a conversation to someone who does not use Collab. A PDF would be enough."
+    },
+    {
+      "id": "pr-715",
+      "kind": "pull_request",
+      "title": "fix(history): keep the scroll position when a new message arrives",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/715",
+      "text": "Pull request #715: fix(history): keep the scroll position when a new message arrives\nMerged: 2026-08-05T14:20:00Z into main\nCommits from this pull request in the release range:\n- 2a3b4c5 fix(history): keep the scroll position when a new message arrives (#715)\n\nWhile reading older messages, a new message used to jump History to the bottom. History now keeps your place and shows a **New messages** button instead."
+    },
+    {
+      "id": "pr-720",
+      "kind": "pull_request",
+      "title": "feat(sync): remove the legacy sync option",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/720",
+      "text": "Pull request #720: feat(sync): remove the legacy sync option\nMerged: 2026-08-06T09:00:00Z into main\nCommits from this pull request in the release range:\n- 3b4c5d6 feat(sync): remove the legacy sync option (#720)\n\nRemoves the **Legacy sync** option from **Settings → Sync**. Conversations sync with the new engine only."
+    },
+    {
+      "id": "pr-724",
+      "kind": "pull_request",
+      "title": "revert: restore the legacy sync option (reverts #720)",
+      "url": "https://github.com/example-org/collab-desktop-example/pull/724",
+      "text": "Pull request #724: revert: restore the legacy sync option (reverts #720)\nMerged: 2026-08-08T17:45:00Z into main\nCommits from this pull request in the release range:\n- 4c5d6e7 revert: restore the legacy sync option (reverts #720) (#724)\n\nThis reverts #720. Several Hubspaces still depend on legacy sync, so the **Legacy sync** option stays in 1.5.0. Removal moves to a later release."
+    },
+    {
+      "id": "release-1.5.0",
+      "kind": "release",
+      "title": "1.5.0",
+      "url": "https://github.com/example-org/collab-desktop-example/releases/tag/1.5.0",
+      "text": "GitHub release 1.5.0 (tag 1.5.0)\nPublished: 2026-08-12T16:00:00Z\nPrerelease: false\nDraft: false\nTarget: main\nAssets:\n- collab-desktop-linux-amd64.tar.gz\n- collab-desktop-linux-amd64.tar.gz.sha256\n- collab-desktop-macos.dmg\n- collab-desktop-macos.dmg.sha256\n- collab-desktop-windows-amd64-installer.exe\n- collab-desktop-windows-amd64-installer.exe.sha256\n\nRelease body:\nHighlights: export any conversation as a PDF on every platform."
+    }
+  ]
+}

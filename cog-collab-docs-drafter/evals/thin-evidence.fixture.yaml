@@ -1,0 +1,9 @@
+# Abstention. Three commits titled "wip", "fix" and "address review comments",
+# no pull requests and no release record: nothing says what changed for
+# users, so the honest answer is to abstain rather than guess.
+name: thin-evidence
+bundle: evals/bundles/thin-evidence.json
+expect:
+  error: false
+  parsed: true
+  abstained: true

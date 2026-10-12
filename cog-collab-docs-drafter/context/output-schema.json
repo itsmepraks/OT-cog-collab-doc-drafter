@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Collab Docs Drafter output",
+  "description": "The payload carried under envelope v1's `payload` key: a release-notes draft for human review. Every claim cites source ids from the input bundle and quotes one of them verbatim. Normative; the model is shown a worked example instead.",
+  "type": "object",
+  "required": ["abstained", "abstain_reason", "release", "intro", "entries", "downloads", "excluded", "gaps"],
+  "properties": {
+    "abstained": {
+      "type": "boolean",
+      "description": "true only when the evidence is too thin to tell what changed for users. A release with no user-facing changes is not an abstention."
+    },
+    "abstain_reason": { "type": ["string", "null"] },
+    "release": {
+      "type": "object",
+      "required": ["version", "previous_version", "channel", "release_date", "source_ids"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "previous_version": { "type": "string", "minLength": 1 },
+        "channel": { "enum": ["stable", "prerelease", "unknown"] },
+        "release_date": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "YYYY-MM-DD copied from a cited release record, or null. Never today's date."
+        },
+        "source_ids": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "intro": {
+      "type": "object",
+      "required": ["text", "source_ids"],
+      "properties": {
+        "text": { "type": "string", "description": "One to three plain sentences for Collab users" },
+        "source_ids": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "entries": {
+      "type": "array",
+      "description": "User-facing changes. One entry per user outcome; group sources only when they share that outcome.",
+      "items": {
+        "type": "object",
+        "required": ["category", "title", "body", "claims", "review"],
+        "properties": {
+          "category": { "enum": ["added", "improved", "fixed", "known_limitation", "action_required"] },
+          "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "body": { "type": "string", "minLength": 1, "description": "User-facing Markdown. Every statement in it must be backed by a claim below." },
+          "claims": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["text", "source_ids", "evidence_quote"],
+              "properties": {
+                "text": { "type": "string", "minLength": 1 },
+                "source_ids": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+                "evidence_quote": { "type": "string", "minLength": 1, "description": "Copied character for character from one cited source" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "review": {
+            "enum": ["proposed", "needs_owner_review"],
+            "description": "needs_owner_review when the wording touches security, privacy, data loss, or a judgment the evidence leaves open"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "downloads": {
+      "type": "array",
+      "description": "Package files named in a cited release record. Empty when there is none.",
+      "items": {
+        "type": "object",
+        "required": ["platform", "filename", "source_ids"],
+        "properties": {
+          "platform": { "type": "string", "minLength": 1 },
+          "filename": { "type": "string", "minLength": 1 },
+          "source_ids": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "excluded": {
+      "type": "array",
+      "description": "Sources deliberately left out of the notes, with the reason.",
+      "items": {
+        "type": "object",
+        "required": ["source_ids", "reason", "note"],
+        "properties": {
+          "source_ids": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "reason": { "enum": ["ci_or_build", "tests_only", "release_tooling", "internal_refactor", "docs_site_only", "reverted", "duplicate", "outside_range", "no_user_impact_shown", "covered_by_other_source", "other"] },
+          "note": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "description": "Questions for the reviewer: missing evidence, conflicts, and decisions only a person can make.",
+      "items": {
+        "type": "object",
+        "required": ["kind", "detail", "source_ids"],
+        "properties": {
+          "kind": { "enum": ["missing_evidence", "conflicting_evidence", "needs_owner_decision", "missing_metadata", "unclear_user_impact", "suspicious_input"] },
+          "detail": { "type": "string", "minLength": 1 },
+          "source_ids": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
