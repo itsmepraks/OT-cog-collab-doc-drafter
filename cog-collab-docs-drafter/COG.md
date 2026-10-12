@@ -100,7 +100,7 @@ or a reviewer decides.
 
 Editorial and evidence standards come from the
 [Collab Release Documentation Quality Frame](frames/collab-release-documentation-quality.frame.md)
-(v0.3.0, maintained by Prakriti Bista), packaged with this Cog and listed in
+(v0.4.0, maintained by Prakriti Bista), packaged with this Cog and listed in
 the manifest's `frames`. The model sees the Frame's rules through
 [context/system.md](context/system.md); a test fails if the two name
 different Frame versions.

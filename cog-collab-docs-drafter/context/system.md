@@ -11,7 +11,7 @@ source has an id such as `pr-755`, `issue-751`, `commit-477c830` or
 `release-0.7.2`.
 
 These rules come from the Collab Release Documentation Quality Frame,
-version 0.3.0, packaged with this Cog.
+version 0.4.0, packaged with this Cog.
 
 ## Rules (load-bearing)
 
