@@ -86,7 +86,16 @@ Envelope v1 with a payload matching
   that source must be the release record, not a pull request or issue.
 - Every **bold** UI label or `code` name in a title, body or the intro must
   appear word for word in a source that text cites.
-- Every source must be cited, excluded or named in a gap. A source the draft
+- No entry, intro or claim may name a platform (macOS, Windows, Linux) that
+  its cited sources never mention; a gap that does so is warned about.
+- Every file the release record lists under "Assets:" belongs in `downloads`;
+  a missing one is a warning.
+- Wording copied from the worked example rather than the evidence is
+  warned about (`example-copy`).
+- When a quote fails, a `grounding-hint` warning says why: an ellipsis joining
+  passages, or where the quote stops matching the source.
+- Every source must be cited, excluded or named in a gap. An issue counts as
+  accounted for when a pull request that closes it is. A source the draft
   ignores is reported as a coverage warning.
 - The Cog abstains only when the evidence cannot tell what changed for users.
   A release whose changes are all internal gets a draft with no entries, not
@@ -100,7 +109,7 @@ or a reviewer decides.
 
 Editorial and evidence standards come from the
 [Collab Release Documentation Quality Frame](frames/collab-release-documentation-quality.frame.md)
-(v0.4.0, maintained by Prakriti Bista), packaged with this Cog and listed in
+(v0.4.0, maintained by the Collab documentation team), packaged with this Cog and listed in
 the manifest's `frames`. The model sees the Frame's rules through
 [context/system.md](context/system.md); a test fails if the two name
 different Frame versions.

@@ -91,6 +91,22 @@ openteams-ai/cog-spec main @06ad55f (2026-09-03), openteams-ai/frame-spec main
     `conflicting_evidence` exists" or "no entry cites pr-720", which a fixture
     cannot say. A reviewer checks those by hand.
 
+14. **The worked example is copied, and nothing generic catches it.** The
+    context-cog machinery shows the model a worked example because small
+    models copy examples well. In our first live run (qwen3:14b, 0.7.2) the
+    model copied the example's gap wording into two gaps about changes the
+    evidence says nothing about. We added an `example-copy` check (six-word
+    overlap with the example that is absent from the evidence). It is
+    task-independent, so it may belong in the shared machinery.
+
+15. **Where does a repair pass belong?** Most of our live-run failures are
+    mechanical (a quote off by one character, `[...]` inside a quote, a
+    misspelled enum) and a second model call given the `problems` list could
+    likely fix them. A Cog cannot call its model twice under the current
+    machinery, and `task_logic.py` has no model access. The Op machinery has
+    retry and `repeat`; does a retry pass the previous `problems` back to the
+    Cog? If so, the repair pass belongs in the Op.
+
 ## Environment notes
 
 - Pixi was not installed on one of our machines. cog-smith's commands also run

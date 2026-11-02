@@ -239,6 +239,13 @@ class TestRenderInput(unittest.TestCase):
             self.assertIn(f"=== source: {src['id']} ({src['kind']})", text)
             self.assertIn(src["text"].rstrip(), text)
 
+    def test_closing_pull_requests_are_visible_to_the_model(self):
+        bundle = sample_bundle()
+        issue = next(s for s in bundle["sources"] if s["id"] == "issue-301")
+        issue["closed_by"] = ["pr-310"]
+        self.assertEqual(cog_core.validate_input(bundle), [])
+        self.assertIn("Closed by: pr-310", task_logic.render_input(bundle))
+
     def test_missing_target_commit_is_visible_to_the_model(self):
         bundle = sample_bundle()
         del bundle["release"]["target_commit"]
@@ -352,6 +359,72 @@ class TestOutputContractChecks(unittest.TestCase):
             o["entries"][0]["body"] += " It never shows **Reconnect**."
         self.assertIn("grounding", checks(self.run_checks(mutate)))
 
+    # Failures seen in the first live 0.7.2 run (qwen3:14b, October 2026).
+    def test_ellipsis_quote_fails_with_a_hint(self):
+        def mutate(o):
+            o["entries"][0]["claims"][0]["evidence_quote"] = (
+                "This adds a **Frame** filter [...] shows only conversations that used it.")
+        problems = self.run_checks(mutate)
+        self.assertIn("grounding", checks(problems, severity="error"))
+        self.assertTrue(any(p["check"] == "grounding-hint" and "ellipsis" in p["detail"]
+                            for p in problems))
+
+    def test_near_miss_quote_hint_says_where_it_diverges(self):
+        def mutate(o):
+            o["entries"][1]["claims"][1]["evidence_quote"] = "so it stays signed in after Collab restarts!"
+        hints = [p for p in self.run_checks(mutate) if p["check"] == "grounding-hint"]
+        self.assertEqual(len(hints), 1)
+        self.assertIn("first 43 of 44 characters match pr-102", hints[0]["detail"])
+
+    def test_no_hint_without_a_grounding_failure(self):
+        self.assertNotIn("grounding-hint", checks(self.run_checks(lambda o: None)))
+
+    def test_platform_the_sources_never_name_fails(self):
+        def mutate(o):
+            o["entries"][0]["body"] += " This works on Linux."
+        problems = self.run_checks(mutate)
+        self.assertTrue(any(p["check"] == "platform" and p["severity"] == "error"
+                            and "Linux" in p["detail"] for p in problems))
+
+    def test_platform_in_a_gap_is_only_a_warning(self):
+        def mutate(o):
+            o["gaps"].append({"kind": "missing_evidence", "source_ids": ["pr-101"],
+                              "detail": "The filter was tested on Windows only."})
+        problems = [p for p in self.run_checks(mutate) if p["check"] == "platform"]
+        self.assertEqual([p["severity"] for p in problems], ["warning"])
+
+    def test_a_ui_window_is_not_the_windows_platform(self):
+        def mutate(o):
+            o["entries"][0]["body"] += " The filter opens in a new window."
+        self.assertNotIn("platform", checks(self.run_checks(mutate)))
+
+    def test_missing_release_asset_is_a_warning(self):
+        problems = self.run_checks(lambda o: o.update(downloads=o["downloads"][:3]))
+        self.assertTrue(any(p["check"] == "downloads" and p["severity"] == "warning"
+                            and "collab-desktop-windows-amd64-installer.exe.sha256" in p["detail"]
+                            for p in problems))
+
+    def test_issue_is_accounted_for_by_the_pr_that_closes_it(self):
+        def mutate(o):
+            o["entries"][0]["claims"][0]["source_ids"] = ["pr-101"]   # drop issue-99
+        self.assertNotIn("coverage", checks(self.run_checks(mutate)))
+
+    def test_closed_by_field_also_accounts_for_an_issue(self):
+        pr = next(s for s in self.bundle["sources"] if s["id"] == "pr-101")
+        pr["text"] = pr["text"].replace("Closes #99.", "Related work.")
+        def mutate(o):
+            o["entries"][0]["claims"][0]["source_ids"] = ["pr-101"]
+        self.assertIn("coverage", checks(self.run_checks(mutate)))
+        next(s for s in self.bundle["sources"] if s["id"] == "issue-99")["closed_by"] = ["pr-101"]
+        self.assertNotIn("coverage", checks(self.run_checks(mutate)))
+
+    def test_issue_whose_pr_is_unaccounted_is_still_reported(self):
+        def mutate(o):
+            o["entries"] = o["entries"][1:]
+            o["intro"]["source_ids"] = ["pr-102"]
+        problems = self.run_checks(mutate)
+        self.assertTrue(any("issue-99" in p["detail"] for p in problems if p["check"] == "coverage"))
+
     # Incorrect metadata source (Prakriti's evaluation case).
     def test_release_date_from_a_pull_request_fails(self):
         self.bundle["sources"][0]["text"] += "\nRelease planned for 2026-05-06."
@@ -448,7 +521,7 @@ class TestFullInvocation(unittest.TestCase):
             env = cog_core.invoke(sample_bundle())
         self.assertTrue(env["ok"])
         found = checks(env["problems"])
-        self.assertTrue({"identity", "citation", "grounding", "coverage"} <= found, found)
+        self.assertTrue({"identity", "citation", "grounding", "coverage", "example-copy"} <= found, found)
 
     def test_unparseable_reply_is_a_named_error(self):
         with canned_model("Here are your release notes: ..."):

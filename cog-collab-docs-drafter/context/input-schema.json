@@ -46,6 +46,7 @@
           "kind": { "enum": ["pull_request", "issue", "commit", "release", "existing_doc", "other"] },
           "title": { "type": "string" },
           "url": { "type": "string", "description": "Link to the original, kept for the reviewer" },
+          "closed_by": { "type": "array", "items": { "type": "string" }, "description": "For an issue: ids of the pull requests in this bundle that close it" },
           "text": { "type": "string", "minLength": 1, "maxLength": 20000,
                     "x-cog-input": { "source": "file", "encoding": "text" } }
         },
