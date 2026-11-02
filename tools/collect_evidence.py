@@ -88,7 +88,7 @@ def pr_source(pr, commits, limit):
             "url": pr["url"], "text": text}, cut
 
 
-def issue_source(issue, limit):
+def issue_source(issue, limit, closed_by=()):
     lines = [f"Issue #{issue['number']}: {issue['title']}",
              f"State: {issue.get('state', 'unknown')}"]
     labels = [lbl["name"] for lbl in issue.get("labels") or []]
@@ -96,8 +96,11 @@ def issue_source(issue, limit):
         lines.append("Labels: " + ", ".join(labels))
     lines += ["", (issue.get("body") or "(no description)").strip()]
     text, cut = truncate("\n".join(lines), limit)
-    return {"id": f"issue-{issue['number']}", "kind": "issue", "title": issue["title"],
-            "url": issue["url"], "text": text}, cut
+    src = {"id": f"issue-{issue['number']}", "kind": "issue", "title": issue["title"],
+           "url": issue["url"], "text": text}
+    if closed_by:
+        src["closed_by"] = sorted(closed_by)
+    return src, cut
 
 
 def commit_source(repo, c, limit):
@@ -142,20 +145,21 @@ def collect(repo, previous, target, product, limit, channel_override=None):
     by_pr, orphans = group_commits_by_pr(
         commits, lambda sha: gh_json(["api", f"repos/{repo}/commits/{sha}/pulls"]))
 
-    sources, truncated, issue_numbers = [], [], []
+    sources, truncated, closers = [], [], {}
     for number in sorted(by_pr):
         pr = gh_json(["pr", "view", str(number), "-R", repo, "--json",
                       "number,title,body,url,mergedAt,baseRefName,labels,closingIssuesReferences"])
         src, cut = pr_source(pr, by_pr[number], limit)
         sources.append(src)
         truncated += [src["id"]] if cut else []
-        issue_numbers += [i["number"] for i in pr.get("closingIssuesReferences") or []]
+        for ref in pr.get("closingIssuesReferences") or []:
+            closers.setdefault(ref["number"], set()).add(src["id"])
 
-    for number in sorted(set(issue_numbers)):
+    for number in sorted(closers):
         issue = gh_json(["issue", "view", str(number), "-R", repo, "--json",
                          "number,title,body,url,state,labels"])
         if issue:
-            src, cut = issue_source(issue, limit)
+            src, cut = issue_source(issue, limit, closers[number])
             sources.append(src)
             truncated += [src["id"]] if cut else []
 

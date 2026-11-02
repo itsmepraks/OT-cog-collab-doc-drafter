@@ -11,6 +11,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import collect_evidence as ce   # noqa: E402
+import compare_runs as cr       # noqa: E402
 import render_notes as rn       # noqa: E402
 
 COG = HERE.parent / "cog-collab-docs-drafter"
@@ -55,6 +56,14 @@ class TestCollector(unittest.TestCase):
         self.assertIn("Adds **Check for updates**.", src["text"])
         self.assertNotIn("someone", json.dumps(src))
 
+    def test_issue_source_records_the_prs_that_close_it(self):
+        issue = {"number": 751, "title": "No way to check for updates", "state": "CLOSED",
+                 "url": "https://github.com/o/r/issues/751", "body": "x", "labels": []}
+        src, _ = ce.issue_source(issue, 8000, {"pr-755"})
+        self.assertEqual(src["closed_by"], ["pr-755"])
+        src, _ = ce.issue_source(issue, 8000)
+        self.assertNotIn("closed_by", src)
+
     def test_release_source_lists_assets(self):
         rel = {"tag_name": "0.7.2", "name": "0.7.2", "published_at": "2026-09-02T20:02:16Z",
                "prerelease": False, "draft": False, "target_commitish": "main",
@@ -95,6 +104,41 @@ class TestRenderer(unittest.TestCase):
         env = {"envelope": 1, "ok": False, "payload": None,
                "error": {"code": "invalid-input", "detail": "release: required"}}
         self.assertIn("invalid-input", rn.render(env))
+
+
+class TestCompareRuns(unittest.TestCase):
+    def setUp(self):
+        self.bundle = json.loads((COG / "tests" / "fixtures" / "worked-example-bundle.json").read_text())
+        self.payload = json.loads((COG / "context" / "output-example.json").read_text())
+
+    def env(self, payload, problems=()):
+        return {"envelope": 1, "ok": True, "error": None, "payload": payload,
+                "problems": list(problems), "binding": {"model_echoed": "m"},
+                "timing": {"latency_s": 1.0}}
+
+    def test_placement_covers_every_source(self):
+        placed = cr.with_closers(cr.placement(self.payload), cr.closed_by(self.bundle))
+        for s in self.bundle["sources"]:
+            self.assertTrue(placed.get(s["id"]), s["id"])
+        self.assertEqual(placed["release-2.4.1"], ["release facts"])
+        self.assertEqual(cr.kind_of(placed["pr-104"]), "excluded")
+
+    def test_disagreement_between_runs_is_marked(self):
+        other = json.loads(json.dumps(self.payload))
+        other["entries"] = other["entries"][:1]
+        other["gaps"] = []
+        other["excluded"].append({"source_ids": ["pr-102"], "reason": "other", "note": "x"})
+        text = cr.report(self.bundle, [("a", self.env(self.payload)), ("b", self.env(other))],
+                         False, {"pr-102": "entry", "pr-104": "excluded"})
+        self.assertIn("| pr-102 ⚠ |", text)
+        self.assertIn("1 of 6 sources were placed differently", text)
+        self.assertIn("| Sources placed as the key expects | 2/2 | 1/2 |", text)
+
+    def test_recheck_uses_the_cogs_current_checks(self):
+        bad = json.loads(json.dumps(self.payload))
+        bad["entries"][0]["claims"][0]["evidence_quote"] = "made up"
+        text = cr.report(self.bundle, [("a", self.env(bad))], True, None)
+        self.assertIn("`grounding`", text)
 
 
 if __name__ == "__main__":
