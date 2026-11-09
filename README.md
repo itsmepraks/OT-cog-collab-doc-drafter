@@ -10,6 +10,8 @@ Version 0.1 does one part of that: it drafts release notes for one Collab Deskto
 | [cog-collab-docs-drafter/frames/](cog-collab-docs-drafter/frames/) | The Collab Release Documentation Quality Frame the Cog follows. |
 | [tools/collect_evidence.py](tools/collect_evidence.py) | Builds the evidence bundle for a tag range from GitHub. Runs outside the Cog. |
 | [tools/render_notes.py](tools/render_notes.py) | Turns the Cog's JSON result into a Markdown draft plus a reviewer appendix. |
+| [tools/compare_runs.py](tools/compare_runs.py) | Compares saved runs on one bundle: problems by check, and how each run treated every source. `--recheck` scores old runs with the current checks. |
+| [docs/evaluation-log.md](docs/evaluation-log.md) | Live runs against real releases: counts, failure classes and what we changed. No private evidence. |
 | [docs/work-contract.md](docs/work-contract.md) | What the Cog takes in, gives back, and must never do. |
 | [docs/spec-findings.md](docs/spec-findings.md) | What broke and where the spec was unclear, for Trent. |
 

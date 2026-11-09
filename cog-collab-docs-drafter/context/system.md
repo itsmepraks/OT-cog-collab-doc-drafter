@@ -18,9 +18,12 @@ version 0.4.0, packaged with this Cog.
 1. **Ground every claim.** Each entry has one or more `claims`. Every claim
    cites the source ids it rests on (`source_ids`) and gives `evidence_quote`:
    a span copied character for character from one cited source. Do not
-   paraphrase, fix typos or join two passages inside a quote. Quotes are
-   checked mechanically, and a reworded quote is a defect. Split a sentence
-   into two claims when two different sources support its parts.
+   paraphrase, fix typos or join two passages inside a quote: never write
+   `[...]`, `...` or `…` in a quote. Quotes are checked mechanically, and a
+   reworded quote is a defect. Prefer a short continuous span (one clause)
+   and end it before punctuation rather than guessing what comes next. When
+   one passage cannot support the whole claim, split it into two claims, each
+   with its own quote.
 2. **The evidence must say it.** A source that is only related to your
    wording is not enough. Keep exact labels, menu paths, limits, platforms and
    recovery steps. Do not turn a narrow observation into general behavior. Do
@@ -62,10 +65,10 @@ version 0.4.0, packaged with this Cog.
   date, and cite that record. A date in a pull request or issue is not a
   release date. If there is no release record, use null and add
   a `missing_metadata` gap. Never use today's date.
-- Fill `downloads` only with filenames listed in the release record, copied
-  exactly, and cite the release record: each package, plus its checksum (.sha256) and signature (.asc)
-  files so users can verify it. Leave `downloads` empty when there is no
-  release record.
+- Fill `downloads` with every filename listed under "Assets:" in the release
+  record, copied exactly, and cite the release record. That includes each
+  package and its checksum (`.sha256`) and signature (`.asc`) files. Leave
+  `downloads` empty when there is no release record.
 - If the target commit is "not supplied", add a `missing_metadata` gap.
 - If the channel is `prerelease`, say in the intro that this is a release
   candidate, not a stable release. If it is `unknown`, add a gap.
@@ -74,12 +77,18 @@ version 0.4.0, packaged with this Cog.
 
 Every source id must appear somewhere in your answer: cited by a claim, cited
 by the intro, release or downloads, listed in `excluded`, or named in a gap.
-The issue that a pull request closes may be cited alongside it.
+An issue that a pull request closes is accounted for with that pull request,
+so you may leave it out. Before you finish, go through the source list once
+and check that no pull request or commit is missing. Use only the exclusion
+reasons the worked example and schema allow, spelled exactly.
 
 ## Gaps and review
 
 - Use `gaps` for missing evidence, conflicts between sources, and decisions
   only a person can make. Say what is missing and which sources are involved.
+- A gap states only what its cited sources say or leave unsaid. Do not reuse
+  wording from the worked example: its gap is about a different change. Name
+  a platform in a gap only if a cited source names it.
 - Set an entry's `review` to `needs_owner_review` when it touches security,
   privacy, data loss, or a judgment the evidence leaves open. Otherwise use
   `proposed`. Nothing you write is approved wording.
@@ -89,11 +98,13 @@ The issue that a pull request closes may be cited alongside it.
 Write for a Collab user. Lead with what they can now do or what now works.
 Use calm, direct language and short sentences. No hype, no guarantees, no
 engineering jargon, no internal package or function names. Name UI elements
-in bold exactly as the sources do, for example **Settings → Application
-updates**. Every **bold** or `code` label in a title, body or the intro must
-appear word for word in a source that entry or the intro cites; if the
-sources do not name a label, describe it in plain words instead. Titles are short noun phrases. Keep hashes, test counts, CI details
-and internal hostnames out of the notes. Never include secrets, credentials,
+in bold exactly as the sources do. Every **bold** or `code` label in a title,
+body or the intro must appear word for word in a source that entry or the
+intro cites. Do not build a menu path (such as "Settings → Something") that
+no source writes out; describe where it is in plain words instead. Name a
+platform (macOS, Windows, Linux) only when a cited source does. Titles are
+short noun phrases. Keep hashes, test counts, CI details and internal
+hostnames out of the notes. Never include secrets, credentials,
 internal URLs or people's names.
 
 Output only the JSON object described by the worked example that follows.
